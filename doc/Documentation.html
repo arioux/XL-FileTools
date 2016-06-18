@@ -1,0 +1,451 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html>
+<!--
+# Copyright (C) 2016  Alain Rioux (le-tools.com)
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+-->
+<head>
+<title>XL-FileTools Documentation</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<style>
+li { margin: 0.5em 0; }
+table.exemples {
+	margin: auto;
+	border-collapse: collapse;
+	border: 1px solid black;
+	border-spacing: 0;
+}
+th {
+	min-width: 100px;
+	text-align: center;
+	font-weight: bold;
+	border: 1px solid black;
+	padding: 4px;
+}
+pre {
+	padding-right: 20px;
+    display: block;
+	line-height: 1.2;
+    font-family: monospace;
+    white-space: pre;
+    margin: 2px;
+} 
+td.middle {
+	border-left: 1px solid black;
+	border-right: 1px solid black;
+}
+</style>
+</head>
+<body>
+
+<table border=0 cellspacing=0cellpadding=0>
+<tr>
+<td width="80px" align="center" rowspan=2><img src="XL-FileTools48.png" alt="Logo" width="48" height="48" border="0"></td>
+<td align="left" valign="center" style="color:#000066; font-size: 100%; font-weight: bold;">XL-FileTools<br>Copyright (c) 2016 Alain Rioux<br></td></tr>
+<tr><td align="left" style="color:#000066; font-size: 90%;">See <a href="./XL-FileTools.html#Credits">Credits</a> about the logo</td></tr>
+</table><br>
+
+<hr>
+
+<h1><a name="Documentation">Documentation</a></h1>
+<ul>
+	<li><a href="#MainWindow">Main window</a></li>
+	<ul>
+		<li>Functions</li>
+		<ul>
+			<li><a href="#ListFiles">List</a></li>
+			<li><a href="#CopyMove">Copy/Move</a></li>
+			<li><a href="#Rename">Rename</a></li>
+			<ul>
+				<li><a href="#Rename">By hash</a></li>
+				<li><a href="#RenameBySort">By sort</a></li>
+				<li><a href="#RenameReplaceBy">Replace-By</a></li>
+			</ul>
+		</ul>
+	</ul>
+	<li><a href="#Validation">Validation on the fly</a></li>
+	<li><a href="#PreviewWindow">Preview window</a></li>
+	<li><a href="#ConfigWindow">Settings window</a></li>
+</ul><br>
+
+<hr>
+
+<a name="MainWindow">
+<h2 style="margin-top:1.5em;">Main window</h2>
+<img src="XL-FileToolsMainWindow.png" alt="Xl-FileTools Main Window" width="800" height="550" border="0">
+</a>
+<p>The main interface is divided in four parts:</p>
+<ul>
+<li><strong>Input:</strong> You can select a folder, a single file or multiple files.</li>
+<li><strong>Filters:</strong> If you select a folder as input, you can use filters to restrict 
+the scope of the process. Default is no filter, but you can select any of the five filters:</li>
+<ul>
+<li><strong>Only folders:</strong> If you select this filter, only a few functions and options 
+will be available. The most interesting thing you can do with this filter is to copy a tree 
+structure with empty folders.</li>
+<li><strong>File size:</strong> This filter applies to files only.</li>
+<li><strong>Contains:</strong> The keyword or regular expression applies to the relative path 
+(folder or file, but excluding input directory). For example, you can use the expression 
+<strong style="color:#CC0033;">\.jpg$|\.gif$|\.bmp$</strong> as a filter to select only 
+image files.</li>
+<li><strong>Last accessed:</strong> This filter applies to files only.</li>
+<li><strong>Last modified:</strong> This filter applies to files only.</li>
+</ul>
+
+<br><div style="margin-bottom:1.5em;"><a href="#Documentation">Top of the page</a></div>
+<li><strong>Functions:</strong> There are three categories:</li>
+<ul>
+<a name="ListFiles">
+<img src="XL-FileToolsFunctionsList.png" alt="Xl-FileTools - Functions - List" 
+width="784" height="159" border="0">
+</a>
+<li><strong>List:</strong> There is no preview for this category.</li>
+<ul>
+<li><strong>List Files:</strong> Produces a report in the TSV (tab-separated values) 
+format. There are six informations you can include are: <strong>full path</strong>, 
+<strong>filename</strong>, <strong>MD5</strong> hash, <strong>SHA1</strong> hash, 
+<strong>file details</strong> (file size, last accessed date and last modified date) 
+and <strong>number of lines</strong> (for text file only). Except for the full path, 
+all other informations apply to files only. By default, report includes a header with 
+the name of each columns, but you can disable it with the <strong>No header</strong> 
+option. With <strong>No folder</strong> option, only files will be included in report.</li>
+<li><strong>List Extensions:</strong> Produces a report in the TSV (tab-separated values) 
+format. The report contains two columns. The first column is the list of extensions found 
+and the second column contains the count for each extension.</li>
+<li><strong>Report:</strong> This is the folder where the report will be saved. The 
+folder is automatically saved.</li>
+</ul>
+
+<br><div style="margin-bottom:1.5em;"><a href="#Documentation">Top of the page</a></div>
+<a name="CopyMove">
+<img src="XL-FileToolsFunctionsCopyMove.png" alt="Xl-FileTools - Functions - Copy or move" 
+width="784" height="159" border="0">
+</a>
+<li><strong>Copy or move:</strong> There are two options: <strong>Duplicate tree 
+structure</strong> (subfolders) and <strong>Exclude duplicates (based on MD5)</strong>.</li>
+<ul>
+<li><strong>Destination:</strong> For this category, you must provide a destination folder. 
+Before copying or moving files, XL-FileTools must check if there is enough space on the 
+destination volume.</li>
+<li><strong>About move:</strong> Move is the fastest, because it simply renames files. If 
+you select <strong>Duplicate tree structure</strong> option, it will also create the 
+subfolders. At the end of the process, XL-FileTools will delete empty folders in the 
+input directory. If some files have not been moved (if you use a filter or in case of 
+error), they will not be deleted.</li>
+</ul>
+
+<br><div style="margin-bottom:1.5em;"><a href="#Documentation">Top of the page</a></div>
+<a name="Rename">
+<img src="XL-FileToolsFunctionsRename.png" alt="Xl-FileTools - Functions - Rename" 
+width="784" height="159" border="0">
+</a>
+<li><strong>Rename:</strong> There are three categories:</li>
+<ul>
+<li><strong>By hash:</strong> This function renames file by their hash value (MD5 or 
+SHA1).</li>
+<br><div style="margin-bottom:1.5em;"><a href="#Documentation">Top of the page</a></div>
+<a name="RenameBySort">
+<li><strong>By sort:</strong> This function does two things. First, it sorts files 
+in each folders. Secondly, it renames the files with an incremental value to keep 
+files sorted. There is a lot of options that you can select in the following window:</li>
+<ul>
+<img src="XL-FileToolsFunctionsRenameBySort.png" alt="Xl-FileTools - Functions - Rename - 
+By Sort" width="640" height="320" border="0">
+</a>
+<li><strong>Sort options:</strong> You can sort files based on the <strong>alphabetical 
+order</strong>, the <strong>file size</strong>, the <strong>last accessed date</strong> 
+or the <strong>last modified date</strong>.</li>
+<li><strong>Rename options:</strong></li>
+<ul>
+<li><strong>Value type:</strong> Type of incremental values. Available types are 
+<strong>decimal (1,2,3,...)</strong>, <strong>lowercase alphabet (a-z,aa-zz,...)</strong>, 
+<strong>uppercase alphabet (A-Z,AA-ZZ,...)</strong>, <strong>lowercase hexadecimal 
+(0-f,00-ff,...)</strong>, <strong>uppercase hexadecimal (0-F,00-FF,...)</strong> 
+and <strong>roman numerals (I,II,III,IV,...)</strong> .</li>
+<li><strong>Length (min):</strong> This is the minimal number of digits to represent 
+the incremental value. As an example, with a length of <strong style="color:#CC0033;">3</strong>, 
+the value <strong style="color:#CC0033;">1</strong> becomes <strong 
+style="color:#CC0033;">001</strong>.</li>
+<li><strong>Start with:</strong> This is the initial value.</li>
+<li><strong>Step by:</strong> This is the difference between each value.</li>
+<li><strong>Prefix (optional):</strong> You can add a fixed string at the beginning of 
+each filename (see <a href="#reservedCharWarning">note</a> about reserved characters).</li>
+<li><strong>Suffix (optional):</strong> You can add a fixed string at the end of each 
+filename (see <a href="#reservedCharWarning">note</a> about reserved characters).</li>
+</ul>
+</ul>
+
+<br><div style="margin-bottom:1.5em;"><a href="#Documentation">Top of the page</a></div>
+<a name="RenameReplaceBy">
+<img src="XL-FileToolsFunctionsRenameReplaceBy.png" alt="Xl-FileTools - Functions - Rename - 
+Replace-By" width="784" height="159" border="0">
+</a>
+<li><strong>Replace-By:</strong> You can replace any part of the filename or in a 
+subfolder name. Avialable options are:</li>
+<ul>
+<li><strong>Regex:</strong> If your expression is a regex, you should check this option. 
+If not checked, every special characters will be mark as literal (escaped).</li>
+<li><strong>Match case:</strong> With this option, expression must match uppercases 
+and lowercases.</li>
+<li><strong>Folders:</strong> By default, your expression will apply to filenames only. 
+With this option, your expression will apply on subfolder names instead.</li>
+<li><strong>Expression in replacement (By):</strong> This is the expression to use as 
+replacement (see <a href="#reservedCharWarning">note</a> about reserved characters). 
+By default, the expression is interpreted as a string like the replace function in 
+XT-Tools which means that you can use capture groups (equivalent to <strong 
+style="color:#CC0033;">sprintf()</strong> with <strong>Eval</strong> option, see examples 
+below).</li>
+<ul>
+<li>
+The <strong>Eval</strong> option tells XL-FileTools to evaluate the expression so you can 
+also use some Perl functions (see <a href="http://perldoc.perl.org/index-functions-by-cat.html#Functions-for-SCALARs-or-strings" 
+target="_blank">here</a> for list of functions). Please note that this can be dangerous 
+if you don't know what you're doing. You really should use this with preview mode before 
+doint it for real. Some examples:</li>
+</ul>
+<br>
+<table class="exemples">
+<tr bgcolor="#E0E0E0">
+<th>Operation</th>
+<th>Filename</th>
+<th>Replace:</th>
+<th>Regex:</th>
+<th>By:</th>
+<th>Eval:</th>
+<th>Results</th>
+</tr>
+<tr>
+<td style="vertical-align: text-top;"><pre>Remove file extension</pre></td>
+<td class="middle"><pre>XL-FileTools-20060611.txt</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>\.\w+$</pre></td>
+<td class="middle"><pre>Yes</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre></pre></td>
+<td class="middle"><pre>No</pre></td>
+<td><pre>XL-FileTools-20060611</pre></td>
+</tr>
+<tr style="border-top: 1px solid black;">
+<td style="vertical-align: text-top;"><pre>Shift data</pre></td>
+<td class="middle"><pre>XL-FileTools_20060611.txt</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>(XL-FileTools)_(\d{8})</pre></td>
+<td class="middle"><pre>Yes</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>$2\-$1</pre></td>
+<td class="middle"><pre>No</pre></td>
+<td><pre>20060611_XL-FileTools.txt</pre></td>
+</tr>
+<tr style="border-top: 1px solid black;">
+<td style="vertical-align: text-top;"><pre>To lowercase</pre></td>
+<td class="middle"><pre>XL-FILETOOLS_20060611.TXT</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>(.+)</pre></td>
+<td class="middle"><pre>Yes</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>\L$1</pre></td>
+<td class="middle"><pre>No</pre></td>
+<td><pre>xl-filetools_20060611.txt</pre></td>
+</tr>
+<tr style="border-top: 1px solid black;">
+<td style="vertical-align: text-top;"><pre>To UPPERCASE with \U</pre></td>
+<td class="middle"><pre>XL-FileTools_20060611.txt</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>(.+)</pre></td>
+<td class="middle"><pre>Yes</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>\U$1</pre></td>
+<td class="middle"><pre>No</pre></td>
+<td><pre>XL-FILETOOLS_20060611.TXT</pre></td>
+</tr>
+<tr style="border-top: 1px solid black;">
+<td style="vertical-align: text-top;"><pre>To UPPERCASE with sprintf</pre></td>
+<td class="middle"><pre>XL-FileTools_20060611.txt</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>(.+)</pre></td>
+<td class="middle"><pre>Yes</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>sprintf("\U$1")</pre></td>
+<td class="middle"><pre>Yes</pre></td>
+<td><pre>XL-FILETOOLS_20060611.TXT</pre></td>
+</tr>
+<tr style="border-top: 1px solid black;">
+<td style="vertical-align: text-top;"><pre>To UPPERCASE with uc</pre></td>
+<td class="middle"><pre>XL-FileTools_20060611.txt</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>(.+)</pre></td>
+<td class="middle"><pre>Yes</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>uc($1)</pre></td>
+<td class="middle"><pre>Yes</pre></td>
+<td><pre>XL-FILETOOLS_20060611.TXT</pre></td>
+</tr>
+<tr style="border-top: 1px solid black;">
+<td style="vertical-align: text-top;"><pre>Convert decimal to UPPERCASE letter</pre></td>
+<td class="middle">
+<pre>
+XL-FileTools_1.txt
+XL-FileTools_2.txt
+XL-FileTools_3.txt
+</pre>
+</td>
+<td class="middle" style="vertical-align: text-top;"><pre>XL-FileTools_(\d+)</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>Yes</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>sprintf("XL-FileTools_").chr($1+64)</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>Yes</pre></td>
+<td>
+<pre>
+XL-FileTools_A.txt
+XL-FileTools_B.txt
+XL-FileTools_C.txt
+</pre>
+</td>
+</tr>
+<tr style="border-top: 1px solid black;">
+<td style="vertical-align: text-top;"><pre>Format number with leading zeroes</pre></td>
+<td class="middle">
+<pre>
+XL-FileTools_1.txt
+XL-FileTools_2.txt
+XL-FileTools_3.txt
+</pre>
+</td>
+<td class="middle" style="vertical-align: text-top;"><pre>XL-FileTools_(\d+)</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>Yes</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>sprintf("XL-FileTools_"."%03d", $1)</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>Yes</pre></td>
+<td>
+<pre>
+XL-FileTools_001.txt
+XL-FileTools_002.txt
+XL-FileTools_003.txt
+</pre>
+</td>
+</tr>
+<tr style="border-top: 1px solid black;">
+<td style="vertical-align: text-top;"><pre>Why dangerous? Try this...</pre></td>
+<td class="middle"><pre>XL-FILETOOLS_20060611.TXT</pre></td>
+<td class="middle"><pre>.+</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>Yes</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>exit(0)</pre></td>
+<td class="middle" style="vertical-align: text-top;"><pre>Yes</pre></td>
+<td class="middle"><pre>Program exits.</pre></td>
+</tr>
+</table>
+</ul>
+<li>Some notes about renaming functions:</li>
+<ul>
+<li><a name="reservedCharWarning"><strong>Reserved characters</strong></a>: Some 
+characters are reserved and can't be used for file and directories (See <a 
+href="https://msdn.microsoft.com/en-us/library/aa365247" target="_blank">here</a> 
+for more details). If you try to use it, you will get error. This include the 
+following characters:</li>
+<ul>
+<li><strong>&lt; (less than)</strong></li>
+<li><strong>&gt; (greater than)</strong></li>
+<li><strong>: (colon)</strong></li>
+<li><strong>" (double quote)</strong></li>
+<li><strong>/ (forward slash)</strong></li>
+<li><strong>\ (backslash)</strong></li>
+<li><strong>| (vertical bar or pipe)</strong></li>
+<li><strong>? (question mark)</strong></li>
+<li><strong>* (asterisk)</strong></li>
+</ul>
+<li>When renaming, if the renamed filename already exists in the destination folder, 
+it will be renamed with an incremental value (1,2,3,...)</li>
+</ul>
+</ul>
+</ul>
+</ul>
+
+<div style="margin-bottom:1.5em;"><a href="#Documentation">Top of the page</a></div>
+<a name="Validation">
+<h2 style="margin-top:1.5em;">Validation on the fly</h2>
+</a>
+
+<p>XL-FileTools, like my other tools, validates controls on the fly. Everytime you 
+click on a checkbox, you select a different option, you change text in a textfield, 
+etc., controls are enabled or disabled according to your changes.</p>
+<p><strong>Regex</strong> and <strong>replacement expression</strong> are also 
+evaluated on the fly and the status will be indicated with a colored border around 
+the corresponding textfield.</p>
+<ul>
+<li><strong style="color: green;">Green</strong> means <strong style="color: green;">OK</strong> ;</li>
+<li><strong style="color: yellow;">Yellow</strong> means <strong style="color: yellow;">Warning</strong> ;</li>
+<li><strong style="color: red;">Red</strong> means <strong style="color: red;">Error</strong> ;</li>
+</ul>
+<p>To see warning or error message, previous controls must meet requirements. In 
+the footer of the <a href="MainWindow">Main Window</a>, if <strong>Not Ready ? 
+Click here</strong> is visible, click on it if you want to know which step comes 
+next.</p>
+<br>
+
+<div style="margin-bottom:1.5em;"><a href="#Documentation">Top of the page</a></div>
+<a name="PreviewWindow">
+<h2 style="margin-top:1.5em;">Preview Window</h2>
+<img src="XL-FileToolsPreviewWindow.png" alt="Xl-Tools Preview Window" width="800" 
+height="550" border="0">
+</a>
+
+<p>With <strong>Preview Window</strong>, you can see what's gonna happen before 
+doing it for real. The Preview is available as soon as your input and selected filter 
+options are validated, but for the left side (<strong>Before</strong>) only. When 
+your function options are set and validated, the results will be shown on the right 
+side (<strong>After</strong>).</p>
+<p>Take note that there's no Preview for the <strong>List</strong> category.</p>
+<p>Some errors and messages can be shown in the <strong>Preview Window</strong> but 
+not all. For example, errors related to file system persmissions can't be evaluated 
+in preview mode.</p>
+
+<div style="margin-bottom:1.5em;"><a href="#Documentation">Top of the page</a></div>
+<a name="ConfigWindow">
+<h2 style="margin-top:1.5em;">Settings window</h2>
+<img src="XL-FileToolsSettingsWindowGeneral.png" alt="Xl-Tools Settings Window - General" width="610" 
+height="280" border="0">
+</a>
+
+<h3 style="margin-top:1.5em;">General</h3>
+<p>In <strong>Tool</strong> section, we have the following functions:</p>
+<ul>
+<li><strong>Export Lang.ini:</strong> Use this function to translate XL-FileTools GUI. 
+See <a href="./XL-FileTools.html#Translation">Translation</a> for help about this 
+functionality.</li>
+<li><strong>Check Update:</strong> Check on <a href="https://le-tools.com" 
+target="_blank">le-tools.com</a> if a tool update is available.</li>
+<li><strong>Check for update at startup:</strong> Check if and update is available 
+everytime XL-FileTools is started.</li>
+</ul>
+<p>In <strong>Functions</strong> section, you have the following options:</p>
+<ul>
+<li><strong>Use lowercases for hash value:</strong> This option applies to 
+<strong>List</strong> and <strong>Rename</strong> functions.</li>
+</ul>
+
+<h3 style="margin-top:1.5em;">Logging</h3>
+<img src="XL-FileToolsSettingsWindowLogging.png" alt="Xl-Tools Settings Window - Logging" width="610" 
+height="280" border="0">
+<p>In <strong>Logging</strong> section, we have the following options:</p>
+<ul>
+<li><strong>Enable logging:</strong> If checked, errors and activities are logged 
+in a text file (<strong>XL-FileTools.log</strong>). You must select a directory 
+where the log file will be created:</li>
+<ul>
+<li><strong>Use program folder:</strong> Folder where the program is.</li>
+<li><strong>Use this folder:</strong> Enter the folder where you want the 
+log file to be saved.</li>
+<li><strong>For copy or move, use destination folder:</strong> If checked, log 
+file will be saved in the destination folder when copy or move function is used. 
+Selected option above remains for other functions.</li>
+</ul>
+</ul>
+
+<br>
+<div style="margin-bottom:1.5em;"><a href="#Documentation">Top of the page</a></div>
+
+<hr>
+
+<p style="color:#000066; font-size: 100%; font-weight: bold;">XL-FileTools<br>Copyright 
+(c) 2016 Alain Rioux</p>
+
+</body>
+</html>
