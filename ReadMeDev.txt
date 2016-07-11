@@ -1,9 +1,11 @@
 XL-FileTools
-Description : Part of the XL-Toolkit, XL-FileTools provides a bunch of tools for 
-			  files like listing, copying, moving, renaming, etc.
-Author 		: Alain Rioux (admin@le-tools.com)
-WebSite		: http://le-tools.com/XL-FileTools.html
-GitHub		: https://github.com/arioux/XL-FileTools
+Description 	: Part of the XL-Toolkit, XL-FileTools provides a bunch of tools for 
+								files like listing, copying, moving, renaming, etc.
+Author 				: Alain Rioux (admin@le-tools.com)
+WebSite				: http://le-tools.com/XL-FileTools.html
+GitHub				: https://github.com/arioux/XL-FileTools
+Documentation	: http://le-tools.com/XL-FileToolsDoc.html
+FossHub      	: http://code.fosshub.com/XL-FileTools
 
 
 Development
@@ -28,7 +30,7 @@ following modules installed:
 To do
 -----
 
-- Nothing for now.
+- Add multiple filter support for file details (size, last access, last modify)
 
 
 

@@ -7,8 +7,8 @@
 # Description : Part of the XL-Toolkit, XL-FileTools provides a bunch of functions
 #               for files like filtering, listing, copying, moving and renaming.
 # Creation    : 2016-05-14
-# Modified    : 2016-06-18
-my $VERSION   = "1.0";
+# Modified    : 2016-07-10
+my $VERSION   = "2.0";
 # Author      : Alain Rioux (admin@le-tools.com)
 #
 # Copyright (C) 2016  Alain Rioux (le-tools.com)
@@ -55,10 +55,13 @@ require "XL-FileToolsLang.pl";
 
 my $PROGDIR = $0;                                                              # Program path
 while (chop($PROGDIR) ne "\\") { }                                             # Dir only
-my $LANG_FILE    = "$PROGDIR\\Lang.ini";                                       # Langage file
-my $CONFIG_FILE  = "$PROGDIR\\XL-FileTools.ini";                               # Configuration file
-my $HELP_FILE    = "$PROGDIR\\Documentation.chm";                              # Help file
-my $URL_TOOL     = 'http://www.le-tools.com/download/XL-FileTools.zip';        # Url of the tool
+my $USERDIR;                                                                   # User path
+if (-d "$ENV{'APPDATA'}\\XL-Toolkit\\XL-FileTools") { $USERDIR = "$ENV{'APPDATA'}\\XL-Toolkit\\XL-FileTools"; }
+else                                                { $USERDIR = $PROGDIR;                                    }
+my $LANG_FILE    = "$USERDIR\\Lang.ini";                                       # Langage file
+my $CONFIG_FILE  = "$USERDIR\\XL-FileTools.ini";                               # Configuration file
+my $URL_DOC      = "http://le-tools.com/XL-FileToolsDoc.html";                 # Online documentation
+my $URL_TOOL     = 'http://le-tools.com/XL-FileTools.html#Download';           # Url of the tool
 my $URL_VER      = 'http://www.le-tools.com/download/XL-FileToolsVer.txt';     # Url of the version file
 my %CONFIG       :shared;                                                      # Configuration
 my %STR;                                                                       # Strings for GUI
@@ -112,7 +115,7 @@ sub LOGPIXELSX() {88}
 sub getDPI { return(Win32::GUI::DC->new()->GetDeviceCaps(LOGPIXELSX)); }
 my $DPI = &getDPI();
 my $fontGB;
-my $fontGB3;
+my $fontGB2;
 my $font10;
 my $font10u;
 # Larger size (125% and 150%)
@@ -120,8 +123,8 @@ if ($DPI >= 120) {
   $fontGB  = new Win32::GUI::Font(-name      => 'Arial',
                                   -size      => 10     ,
                                   -bold      => 1      , );
-  $fontGB3 = new Win32::GUI::Font(-name      => 'Open Sans',
-                                  -size      => 14     ,
+  $fontGB2 = new Win32::GUI::Font(-name      => 'Arial',
+                                  -size      => 12     ,
                                   -bold      => 1      ,
                                   -underline => 1      , );
   $font10  = new Win32::GUI::Font(-name      => 'Arial',
@@ -135,8 +138,8 @@ if ($DPI >= 120) {
   $fontGB  = new Win32::GUI::Font(-name      => 'Arial',
                                   -size      => 12     ,
                                   -bold      => 1      , );
-  $fontGB3 = new Win32::GUI::Font(-name      => 'Open Sans',
-                                  -size      => 16     ,
+  $fontGB2 = new Win32::GUI::Font(-name      => 'Arial',
+                                  -size      => 14     ,
                                   -bold      => 1      ,
                                   -underline => 1      , );
   $font10  = new Win32::GUI::Font(-name      => 'Arial',
@@ -785,14 +788,14 @@ $winRenBySortOpt->AddLabel(   -name        => 'lblSortShadowT'       ,
                               -foreground  => [180, 180, 180]        ,
                               -background  => [255, 255, 255]        ,
                               -text        => $STR{'sortOpt'}.':'    ,
-                              -font        => $fontGB3               , );
+                              -font        => $fontGB2               , );
 $winRenBySortOpt->AddLabel(   -name        => 'lblSortT'             ,
                               -size        => [150, 25]              ,
                               -pos         => [150,  5]              ,
                               -addstyle    => 11                     , # Transparent
                               -foreground  => [250, 195,  27]        ,
                               -text        => $STR{'sortOpt'}.':'    ,
-                              -font        => $fontGB3               , );
+                              -font        => $fontGB2               , );
 $winRenBySortOpt->AddLabel(   -name        => 'lblSortBy'            ,
                               -size        => [ 80, 20]              ,
                               -pos         => [150, 43]              ,
@@ -834,14 +837,14 @@ $winRenBySortOpt->AddLabel(       -name        => 'lblRenameShadowT'     ,
                                   -foreground  => [180, 180, 180]        ,
                                   -background  => [255, 255, 255]        ,
                                   -text        => $STR{'renameOpt'}.':'  ,
-                                  -font        => $fontGB3               , );
+                                  -font        => $fontGB2               , );
 $winRenBySortOpt->AddLabel(       -name        => 'lblRenameT'           ,
                                   -size        => [200, 25]              ,
                                   -pos         => [150, 80]              ,
                                   -addstyle    => 11                     , # Transparent
                                   -foreground  => [250, 195,  27]        ,
                                   -text        => $STR{'renameOpt'}.':'  ,
-                                  -font        => $fontGB3               , );
+                                  -font        => $fontGB2               , );
 $winRenBySortOpt->AddLabel(       -name        => 'lblIncrValType'       ,
                                   -size        => [115, 20]              ,
                                   -pos         => [150,118]              ,
@@ -970,14 +973,14 @@ $imageList->Add($warnFileBmp    , 0);
 $winPreview->AddLabel(                    -name        => 'lblBeforeShadowT',
                                           -size        => [100, 22]         ,
                                           -pos         => [  6,  6]         ,
-                                          -font        => $fontGB3          ,
+                                          -font        => $fontGB2          ,
                                           -foreground  => [180, 180, 180]   ,
                                           -background  => [255, 255, 255]   ,
                                           -text        => $STR{'Before'}.':', );
 $winPreview->AddLabel(                    -name        => 'lblBeforeT'      ,
                                           -size        => [100, 22]         ,
                                           -pos         => [  5,  5]         ,
-                                          -font        => $fontGB3          ,
+                                          -font        => $fontGB2          ,
                                           -addstyle    => 11                , # Transparent
                                           -foreground  => [250, 195,  27]   ,
                                           -text        => $STR{'Before'}.':', );
@@ -1002,14 +1005,14 @@ $winPreview->AddTreeView(                 -name        => 'tvBefore'        ,
 $winPreview->AddLabel(                    -name        => 'lblAfterShadowT' ,
                                           -size        => [100, 22]         ,
                                           -pos         => [316,  6]         ,
-                                          -font        => $fontGB3          ,
+                                          -font        => $fontGB2          ,
                                           -foreground  => [180, 180, 180]   ,
                                           -background  => [255, 255, 255]   , 
                                           -text        => $STR{'After'}.':' , );
 $winPreview->AddLabel(                    -name        => 'lblAfterT'       ,
                                           -size        => [100, 22]         ,
                                           -pos         => [315,  5]         ,
-                                          -font        => $fontGB3          ,
+                                          -font        => $fontGB2          ,
                                           -addstyle    => 11                , # Transparent
                                           -foreground  => [250, 195,  27]   ,
                                           -text        => $STR{'After'}.':' , );
@@ -1073,14 +1076,14 @@ $winConfig->AddLabel(       -name        => 'lblToolShadowT'        ,
                             -foreground  => [180, 180, 180]         ,
                             -background  => [255, 255, 255]         ,
                             -text        => $STR{'Tool'}.':'        ,
-                            -font        => $fontGB3                , );
+                            -font        => $fontGB2                , );
 $winConfig->AddLabel(       -name        => 'lblToolT'              ,
                             -size        => [ 80, 22]               ,
                             -pos         => [150, 35]               ,
                             -addstyle    => 11                      , # Transparent
                             -foreground  => [250, 195,  27]         ,
                             -text        => $STR{'Tool'}.':'        ,
-                            -font        => $fontGB3                , );
+                            -font        => $fontGB2                , );
 $winConfig->AddButton(      -name        => 'btnExportLang'         ,
                             -size        => [125, 24]               ,
                             -pos         => [150, 68]               ,
@@ -1106,14 +1109,14 @@ $winConfig->AddLabel(       -name        => 'lblFuncShadowT'        ,
                             -foreground  => [180, 180, 180]         ,
                             -background  => [255, 255, 255]         ,
                             -text        => $STR{'lblFuncT'}.':'    ,
-                            -font        => $fontGB3                , );
+                            -font        => $fontGB2                , );
 $winConfig->AddLabel(       -name        => 'lblFuncT'              ,
                             -size        => [350, 22]               ,
                             -pos         => [150,135]               ,
                             -addstyle    => 11                      , # Transparent
                             -foreground  => [250, 195,  27]         ,
                             -text        => $STR{'lblFuncT'}.':'    ,
-                            -font        => $fontGB3                , );
+                            -font        => $fontGB2                , );
 $winConfig->AddCheckbox(    -name        => 'chHashLowercase'       ,
                             -size        => [350, 20]               ,
                             -pos         => [150,170]               ,
@@ -1123,7 +1126,6 @@ $winConfig->AddCheckbox(    -name        => 'chHashLowercase'       ,
                             -tabstop     => 1                       , );
 
 # Logging tab
-
 $winConfig->AddCheckbox(    -name        => 'chEnableLogging'       ,
                             -size        => [350, 20]               ,
                             -pos         => [150, 40]               ,
@@ -1133,11 +1135,11 @@ $winConfig->AddCheckbox(    -name        => 'chEnableLogging'       ,
                             -checked     => 1                       ,
                             -visible     => 0                       ,
                             -tabstop     => 1                       , );
-$winConfig->AddRadioButton( -name        => 'rbUseProgramDir'       ,
+$winConfig->AddRadioButton( -name        => 'rbUseDefaultDir'       ,
                             -size        => [150, 20]               ,
                             -pos         => [150, 70]               ,
                             -background  => [255, 255, 255]         ,
-                            -text        => $STR{'rbUseProgramDir'} ,
+                            -text        => $STR{'rbUseDefaultDir'} ,
                             -font        => $font10                 ,
                             -group       => 1                       ,
                             -checked     => 1                       ,
@@ -1668,6 +1670,12 @@ sub selectFilter
     $win->chRenReplaceRegex->Disable();
     $win->chRenReplaceByEval->Disable();
     $win->chRenReplaceFolder->Disable();
+    $win->lblRenReplaceOk->Hide();
+    $win->lblRenReplaceErr->Hide();
+    $win->lblRenReplaceWarn->Hide();
+    $win->lblRenReplaceByOk->Hide();
+    $win->lblRenReplaceByErr->Hide();
+    $win->lblRenReplaceByWarn->Hide();
     
   } elsif ($win->rbFiltersSize->Checked()) {    # Filter: File size
     # Enable options
@@ -3356,7 +3364,7 @@ sub listFilesReport
   if ($winConfig->chEnableLogging->Checked()) {
     if ($winConfig->rbLoggingDir->Checked() and -d $winConfig->tfLoggingDir->Text()) {
       $logFile = $winConfig->tfLoggingDir->Text();
-    } else { $logFile = $PROGDIR; }
+    } else { $logFile = $USERDIR; }
     $logFile .= "\\XL-FileTools.log";
     if (open($fhLog, '>', $logFile)) { flock($fhLog, 2); $logging = 1; }
   }
@@ -3592,7 +3600,7 @@ sub copyMove
     } else {
       if ($winConfig->rbLoggingDir->Checked() and -d $winConfig->tfLoggingDir->Text()) {
         $logFile = $winConfig->tfLoggingDir->Text();
-      } else { $logFile = $PROGDIR; }
+      } else { $logFile = $USERDIR; }
     }
     $logFile .= "\\XL-FileTools.log";
     if (open($fhLog, '>', $logFile)) { flock($fhLog, 2); $logging = 1; }
@@ -3871,7 +3879,7 @@ sub renameFiles
     $logging = 1;
     if ($winConfig->rbLoggingDir->Checked() and -d $winConfig->tfLoggingDir->Text()) {
       $logFile = $winConfig->tfLoggingDir->Text();
-    } else { $logFile = $PROGDIR; }
+    } else { $logFile = $USERDIR; }
     $logFile .= "\\XL-FileTools.log";
     if (open($fhLog, '>', $logFile)) { flock($fhLog, 2); $logging = 1; }
   }
@@ -4504,17 +4512,18 @@ sub isFunctionsReady
   } elsif ($win->TabFunctions->SelectedItem() == 2 and $win->rbRenReplace->Checked() and
            ($win->chRenReplaceRegex->Checked() or $win->chRenReplaceByEval->Checked())) { # Valid regex
     # Regex is valid ?
-    if ($win->chRenReplaceRegex->Checked() and $win->tfRenReplace->Text()) {
-      my ($status, $msg) = &validRegex($win->tfRenReplace->Text());
-      if ($status) {
-        $nextStep = $STR{'errRegex'} . ' ' . $STR{'errRegexReplace'} . ":\n\n";
-        if ($msg) { $nextStep .= $msg; }
+    if ($win->chRenReplaceRegex->Checked()) {
+      if ($win->tfRenReplace->Text()) {
+        my ($status, $msg) = &validRegex($win->tfRenReplace->Text());
+        if ($status and $status == 1) {
+          $nextStep = $STR{'errRegex'} . ' ' . $STR{'errRegexReplace'} . ":\n\n";
+          if ($msg) { $nextStep .= $msg; }
+        }
       }
-    } elsif ($win->chRenReplaceRegex->Checked()) {
       # Replacement expression is valid ?
       if ($win->tfRenReplaceBy->Text()) {
         my ($status, $msg) = &validReplacement;
-        if ($status) {
+        if ($status and $status == 1) {
           $nextStep = $STR{'errBy'} . ' ' . $STR{'errRegexReplaceBy'} . ":\n\n";
           if ($msg) { $nextStep .= $msg; }
         }
@@ -4614,7 +4623,7 @@ sub configTab_Click
     $winConfig->chHashLowercase->Show();
     # Hide logging tab
     $winConfig->chEnableLogging->Hide();
-    $winConfig->rbUseProgramDir->Hide();
+    $winConfig->rbUseDefaultDir->Hide();
     $winConfig->rbLoggingDir->Hide();
     $winConfig->tfLoggingDir->Hide();
     $winConfig->btnLoggingDir->Hide();
@@ -4624,17 +4633,17 @@ sub configTab_Click
   } else {
     $winConfig->chEnableLogging->Show();
     # Show options
-    $winConfig->rbUseProgramDir->Show();
+    $winConfig->rbUseDefaultDir->Show();
     $winConfig->rbLoggingDir->Show();
     $winConfig->tfLoggingDir->Show();
     $winConfig->btnLoggingDir->Show();
     $winConfig->chUseDestDirCM->Show();
     if ($winConfig->chEnableLogging->Checked()) {
       # Enable options
-      $winConfig->rbUseProgramDir->Enable();
+      $winConfig->rbUseDefaultDir->Enable();
       $winConfig->rbLoggingDir->Enable();
       $winConfig->chUseDestDirCM->Enable();
-      if ($winConfig->rbUseProgramDir->Checked()) {
+      if ($winConfig->rbUseDefaultDir->Checked()) {
         $winConfig->tfLoggingDir->Disable();
         $winConfig->btnLoggingDir->Disable();
       } else {
@@ -4643,7 +4652,7 @@ sub configTab_Click
       }
     } else {
       # Disable options
-      $winConfig->rbUseProgramDir->Disable();
+      $winConfig->rbUseDefaultDir->Disable();
       $winConfig->rbLoggingDir->Disable();
       $winConfig->tfLoggingDir->Disable();
       $winConfig->btnLoggingDir->Disable();
@@ -4763,7 +4772,7 @@ sub chEnableLogging_Click
     &saveConfig(\%CONFIG);
     
     # Enable options
-    $winConfig->rbUseProgramDir->Enable();
+    $winConfig->rbUseDefaultDir->Enable();
     $winConfig->rbLoggingDir->Enable();
     $winConfig->tfLoggingDir->Enable();
     $winConfig->btnLoggingDir->Enable();
@@ -4774,7 +4783,7 @@ sub chEnableLogging_Click
     &saveConfig(\%CONFIG);
     
     # Disable options
-    $winConfig->rbUseProgramDir->Disable();
+    $winConfig->rbUseDefaultDir->Disable();
     $winConfig->rbLoggingDir->Disable();
     $winConfig->tfLoggingDir->Disable();
     $winConfig->btnLoggingDir->Disable();
@@ -4784,24 +4793,24 @@ sub chEnableLogging_Click
 }  #--- End chEnableLogging_Click
 
 #--------------------------#
-sub rbUseProgramDir_Click
+sub rbUseDefaultDir_Click
 #--------------------------#
 {
   # Save the choice
-  $CONFIG{'LOG_USE_PROGRAM_DIR'} = 1;
+  $CONFIG{'LOG_USE_DEFAULT_DIR'} = 1;
   &saveConfig(\%CONFIG);
   
   $winConfig->tfLoggingDir->Disable();
   $winConfig->btnLoggingDir->Disable();
 
-}  #--- End rbUseProgramDir_Click
+}  #--- End rbUseDefaultDir_Click
 
 #--------------------------#
 sub rbLoggingDir_Click
 #--------------------------#
 {
   # Save the choice
-  $CONFIG{'LOG_USE_PROGRAM_DIR'} = 0;
+  $CONFIG{'LOG_USE_DEFAULT_DIR'} = 0;
   &saveConfig(\%CONFIG);
 
   $winConfig->tfLoggingDir->Enable();
@@ -4884,12 +4893,8 @@ sub chUseDestDirCM_Click
 sub btnHelp_Click
 #--------------------------#
 {
-  if (-e $HELP_FILE) {
-    # Open the page
-    $win->ShellExecute('open', $HELP_FILE,'','',1);
-  } else {
-    Win32::GUI::MessageBox($win, $STR{'errDoc'}, $STR{'error'}, 0x40010);
-  }  
+  # Open Firefox to XL-FileTools page
+  $win->ShellExecute('open', $URL_DOC,'','',1) or Win32::GUI::MessageBox($win, Win32::FormatMessage(Win32::GetLastError()), "$STR{'update3'} XL-FileTools",0x40010);
 
 }  #--- End btnHelp_Click
 
@@ -4986,27 +4991,25 @@ sub loadConfig
   # Logging
   if (exists($$refConfig{'ENABLE_LOGGING'}))        { $winConfig->chEnableLogging->Checked($$refConfig{'ENABLE_LOGGING'});          }
   else                                              { $winConfig->chEnableLogging->Checked(1);                                      } # Default is checked
-  if (exists($$refConfig{'LOG_USE_PROGRAM_DIR'}))   {
-    if ($$refConfig{'LOG_USE_PROGRAM_DIR'})         {
-      $winConfig->rbUseProgramDir->Checked(1);
-      $winConfig->rbLoggingDir->Checked(0);
-      $winConfig->tfLoggingDir->Disable();
-      $winConfig->btnLoggingDir->Disable();
-    } else {
-      $winConfig->rbLoggingDir->Checked(1);
-      $winConfig->rbUseProgramDir->Checked(0);
-      $winConfig->tfLoggingDir->Enable();
-      $winConfig->btnLoggingDir->Enable();
-    }
+  if (exists($$refConfig{'LOGGING_DIR'}) and -d $$refConfig{'LOGGING_DIR'}) { # Use defined logging dir
+    $winConfig->tfLoggingDir->Text($$refConfig{'LOGGING_DIR'});
+    $winConfig->rbLoggingDir->Checked(1);
+    $winConfig->rbUseDefaultDir->Checked(0);
+    $winConfig->tfLoggingDir->Enable();
+    $winConfig->btnLoggingDir->Enable();
+  } else {                                                                    # Use default dir
+    $winConfig->rbUseDefaultDir->Checked(1);
+    $winConfig->rbLoggingDir->Checked(0);
+    $winConfig->tfLoggingDir->Disable();
+    $winConfig->btnLoggingDir->Disable();
   }
-  if (exists($$refConfig{'LOGGING_DIR'}) and
-      -d $$refConfig{'LOGGING_DIR'})                { $winConfig->tfLoggingDir->Text($$refConfig{'LOGGING_DIR'});                   }
   if (exists($$refConfig{'LOG_USE_DST_DIR'}))       { $winConfig->chUseDestDirCM->Checked($$refConfig{'LOG_USE_DST_DIR'});          }
   else                                              { $winConfig->chUseDestDirCM->Checked(0);                                       } # Default is not checked
   
   # Folder for report
   if (exists($$refConfig{'DIR_REPORT'}) and
       -d $$refConfig{'DIR_REPORT'})                 { $win->tfReportDir->Text($$refConfig{'DIR_REPORT'});                           }
+  else                                              { $win->tfReportDir->Text($USERDIR);                                            } # Default dir
   if (exists($$refConfig{'AUTO_OPEN_REPORT'}))      { $win->chOpenReport->Checked($$refConfig{'AUTO_OPEN_REPORT'});                 }
   else                                              { $win->chOpenReport->Checked(1);                                               } # Default is checked
 

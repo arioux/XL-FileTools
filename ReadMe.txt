@@ -1,84 +1,11 @@
 XL-FileTools
-Description : Part of the XL-Toolkit, XL-FileTools provides a bunch of tools for 
-			  files like listing, copying, moving, renaming, etc.
-Author 		: Alain Rioux (admin@le-tools.com)
-WebSite		: http://le-tools.com/XL-FileTools.html
-GitHub		: https://github.com/arioux/XL-FileTools
-
-
-What is it
-----------
-
-XL-FileTools provides a bunch of functions for files, grouped in three categories:
-- Lists: 	  There are two types: list of folders and files and list of extensions. 
-			  - List of files produces a tab of informations about files that can 
-				include full path, filename, MD5 hash, SHA1 hash, Last accessed or 
-				modified date and number of lines if it's a text file. 
-			  - List of extensions enumerate and calculate the number of extensions 
-				in a folder.
-- Copy/Move:  Copy and move the selected folders and files. Duplicates (based on the 
-			  MD5 hash) can be excluded. The most interesting thing about using 
-			  XL-FileTools to copy or move files is filters. Filters can be used 
-			  with any function, but copy and move would be worthless without it. 
-			  You can filter by file size, last accessed or modified date, using 
-			  a keyword or regex, etc.
-- Rename:	  There are three types: By hash (MD5 or SHA1), By sort or Replace-By. 
-			  - By hash simply renames file based on the calculated MD5 or SHA1 hash 
-				value. Extension may be preserved or not.
-			  - By sort applies a sort to a list of files before renaming them with an 
-				incremental value. There a lot of options for type of sort and type of 
-				incremental value. 
-			  - Replace-By can be used on filename or folder name. You can use keyword 
-				or regex.
-
-Another interesting feature of XL-FileTools is preview mode. You can see what's gonna 
-happen before doing it for real. See documentation for more details.
-
-
-How it works
-------------
-
-XL-FileTools doesn't require any installation. In order to start using it, just 
-run the executable file. 
-
-
-What do you need
-----------------
-
-- Windows XP or newer
-
-
-Versions History
-----------------
-* Version 1.0
-	- First release.
-
-
-Translation
------------
-
-To translate XL-FileTools to other languages:
-1. 	In "Config" tab, use the "Export Lang.ini" function. The file will be 
-	saved in the same directory of the tool;
-2. 	Open the file in any text editor like Notepad;
-3. 	Translate each expression at the right of the "=" symbol;
-	-	The expression on the left side is used by the tool to identify the 
-		expression 	so don't change it. Also, be sure to have a space between 
-		the "=" symbol and your expression (ex. Key = Value);
-	- 	Authorized characters are alphanumerics, spaces and these symbols: ",", 
-		".", "-", "!", "'", "(" and ")". Any other character will be deleted;
-	-	For some controls, String length must be the same as original. A longer 
-		string could be truncated if it doesn't match the length of the field;
-	- 	The value associated with the "translatorName" will be used in the 
-		"About" window to identify you as translator (if you want). You can 
-		also add your email or a short 	url (ex. YourName (youraddress@email.com));
-4. 	Restart the tool so the strings in "Lang.ini" will be used instead of the 
-	default language.
-
-* If you translate the tool and you want to share, contact the author.
-
-Available translations:
-See Website for available translations.
+Description 	: Part of the XL-Toolkit, XL-FileTools provides a bunch of tools for 
+							  files like listing, copying, moving, renaming, etc.
+Author 				: Alain Rioux (admin@le-tools.com)
+WebSite				: http://le-tools.com/XL-FileTools.html
+GitHub				: https://github.com/arioux/XL-FileTools
+Documentation	: http://le-tools.com/XL-FileToolsDoc.html
+FossHub      	: http://code.fosshub.com/XL-FileTools
 
 
 Licence
@@ -98,13 +25,6 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-
-Feedback
---------
-
-If you have any problem, suggestion, comment, or you found a bug in my
-utility, you can send a message at http://le-tools.com/about.php.
 
 
 Credits

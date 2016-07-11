@@ -201,10 +201,9 @@ sub loadDefaultStr
   # Logging tab
   $$refSTR{'logging'}         = 'Logging';
   $$refSTR{'chEnableLogging'} = 'Enable logging';
-  $$refSTR{'rbUseProgramDir'} = 'Use program folder';
+  $$refSTR{'rbUseDefaultDir'} = 'Use default folder';
   $$refSTR{'chUseDestDirCM'}  = 'For copy or move, use destination folder';
   $$refSTR{'rbLoggingDir'}    = 'Use this folder';
-  
   
   # Rename By Sort Option Window
   $$refSTR{'sortOpt'}         = 'Sort options';
