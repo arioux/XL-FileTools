@@ -7,8 +7,8 @@
 # Description : Part of the XL-Toolkit, XL-FileTools provides a bunch of functions
 #               for files like filtering, listing, copying, moving and renaming.
 # Creation    : 2016-05-14
-# Modified    : 2016-07-10
-my $VERSION   = "2.0";
+# Modified    : 2016-07-14
+my $VERSION   = "2.1";
 # Author      : Alain Rioux (admin@le-tools.com)
 #
 # Copyright (C) 2016  Alain Rioux (le-tools.com)
@@ -2119,6 +2119,8 @@ sub tfReportDir_Change
       if ($START == 1) { Win32::GUI::MessageBox($win, $STR{'errNoValidFile'}, $STR{'Error'}, 0x40010); }
     }
   }
+  
+  &isProcessReady(0);
 
 }  #--- End tfReportDir_Change
 
@@ -3142,6 +3144,8 @@ sub getListFiles
     elsif ($win->rbFiltersContains->Checked()) {
       $regex  = $win->tfFiltersContains->Text();
       $filter = 3;
+      # Regex option is checked
+      if (!$win->chFiltersContainsRegex->Checked()) { $regex = quotemeta($regex); }
     }
     # Filter: Last accessed date
     elsif ($win->rbFiltersLastAccess->Checked()) {
@@ -3193,8 +3197,6 @@ sub getListFiles
           elsif ($filter == 1) { next; }
           # Filter: Regex
           elsif ($filter == 3) {
-            # Regex option is checked
-            if (!$win->chFiltersContainsRegex->Checked()) { $regex = quotemeta($regex); }
             # Test Regex
             if (($win->chFiltersContainsCase->Checked()  and $file =~ /$regex/) or
                 (!$win->chFiltersContainsCase->Checked() and $file =~ /$regex/i)) {
@@ -4492,6 +4494,8 @@ sub isFunctionsReady
       !$win->chListFilesOpt3->Checked()   and !$win->chListFilesOpt4->Checked() and
       !$win->chListFilesOpt5->Checked()   and !$win->chListFilesOpt6->Checked()) {
     $nextStep = $STR{'setListFilesOpt'};
+  } elsif ($win->rbListFiles->Checked() and !-d $win->tfReportDir->Text()) {
+    $nextStep = $STR{'selectReportDir'};
   }
   # Copy or move
   if ($win->TabFunctions->SelectedItem() == 1 and !$win->tfDestinationDir->Text()) {
