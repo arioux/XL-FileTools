@@ -7,8 +7,8 @@
 # Description : Part of the XL-Toolkit, XL-FileTools provides a bunch of functions
 #               for files like filtering, listing, copying, moving and renaming.
 # Creation    : 2016-05-14
-# Modified    : 2016-07-14
-my $VERSION   = "2.1";
+# Modified    : 2016-07-22
+my $VERSION   = "3.0";
 # Author      : Alain Rioux (admin@le-tools.com)
 #
 # Copyright (C) 2016  Alain Rioux (le-tools.com)
@@ -34,8 +34,9 @@ my $VERSION   = "2.1";
 use strict;
 use warnings;
 use Digest::MD5::File qw(file_md5_hex);
-use Digest::SHA1 qw(sha1_hex);
+use Digest::SHA qw(sha1_hex sha256_hex sha512_hex);
 use Text::Roman qw(:all);
+use Excel::Writer::XLSX;
 use File::Copy;
 use File::Copy::Recursive qw(fcopy fmove);
 use Time::Local;
@@ -43,6 +44,7 @@ use Win32::API();
 use Win32::DriveInfo;
 use Win32::GUI();
 use Win32::GUI 1.06 qw(:toolbar ILC_MASK CW_USEDEFAULT);
+use Win32::GUI::Grid;
 use Win32::Process;
 use threads;
 use threads::shared;
@@ -55,6 +57,7 @@ require "XL-FileToolsLang.pl";
 
 my $PROGDIR = $0;                                                              # Program path
 while (chop($PROGDIR) ne "\\") { }                                             # Dir only
+my $REF_ARG      = \@ARGV;                                                     # If objects passed (using SendTo)
 my $USERDIR;                                                                   # User path
 if (-d "$ENV{'APPDATA'}\\XL-Toolkit\\XL-FileTools") { $USERDIR = "$ENV{'APPDATA'}\\XL-Toolkit\\XL-FileTools"; }
 else                                                { $USERDIR = $PROGDIR;                                    }
@@ -78,7 +81,7 @@ my $START = 0;                                                                 #
 my ($winICO, $logoBmp, $logo128Bmp, $openDirBmp, $openFileBmp, $processBmp,
     $stopBmp, $previewBmp, $config32Bmp, $helpBmp, $aboutBmp, $config128Bmp,
     $browseBmp, $folderClosedBmp, $folderOpenedBmp, $fileBmp, $delFileBmp,
-    $warnFileBmp) = &loadGraph();
+    $warnFileBmp, $filterSet, $filterAdd, $filterDel) = &loadGraph();
 
 #------------------------------------------------------------------------------#
 # Strings
@@ -96,7 +99,7 @@ my $screen    = Win32::GUI::GetDesktopWindow(); # Screen resolution
 my $scrnX     = Win32::GUI::Width($screen);
 my $scrnY     = Win32::GUI::Height($screen);
 my $winWidth  = 800;
-my $winHeight = 550;
+my $winHeight = 510;
 my $winPosX   = ($scrnX - $winWidth)  / 2;
 my $winPosY   = ($scrnY - $winHeight) / 2;
 
@@ -175,207 +178,74 @@ $win->AddLabel(       -name        => 'lblInputT'             ,
                       -background  => [255, 210,  84]         , );
 $win->AddRadioButton( -name        => 'rbInputDir'            ,
                       -size        => [ 80, 22]               ,
-                      -pos         => [  5, 95]               ,
+                      -pos         => [  5, 90]               ,
                       -background  => [255, 255, 255]         ,
-                      -text        => $STR{'rbInputDir'}.':'  ,
+                      -text        => $STR{'rbInputDir'}      ,
                       -font        => $font10                 ,
                       -checked     => 1                       ,
                       -group       => 1                       ,
                       -tabstop     => 1                       , );
-$win->AddTextfield(   -name        => 'tfInputDir'            ,
-                      -size        => [465, 22]               ,
-                      -pos         => [ 90, 95]               ,
-                      -tabstop     => 1                       , );
-$win->AddButton(      -name        => 'btnInputDir'           ,
-                      -size        => [ 22, 22]               ,
-                      -pos         => [557, 95]               ,
-                      -bitmap      => $openDirBmp             ,
+$win->AddRadioButton( -name        => 'rbInputFiles'          ,
+                      -size        => [ 80, 22]               ,
+                      -pos         => [ 90, 90]               ,
+                      -background  => [255, 255, 255]         ,
+                      -text        => $STR{'rbInputFiles'}    ,
+                      -font        => $font10                 ,
                       -tabstop     => 1                       , );
 $win->AddCheckbox(    -name        => 'chInputDirRecurse'     ,
                       -size        => [135, 22]               ,
-                      -pos         => [582, 95]               ,
+                      -pos         => [ 90,115]               ,
                       -text        => $STR{'chInputDirRecurse'},
                       -background  => [255, 255, 255]         ,
                       -font        => $font10                 ,
                       -tabstop     => 1                       ,
                       -checked     => 1                       , );
-$win->AddRadioButton( -name        => 'rbInputFiles'          ,
-                      -size        => [ 80, 22]               ,
-                      -pos         => [  5,120]               ,
-                      -background  => [255, 255, 255]         ,
-                      -text        => $STR{'rbInputFiles'}.':',
-                      -font        => $font10                 ,
-                      -tabstop     => 1                       , );
-$win->AddTextfield(   -name        => 'tfInputFiles'          ,
+
+$win->AddTextfield(   -name        => 'tfInput'               ,
                       -size        => [465, 22]               ,
-                      -pos         => [ 90,120]               ,
-                      -disabled    => 1                      ,
+                      -pos         => [  5,115]               ,
                       -tabstop     => 1                       , );
-$win->AddButton(      -name        => 'btnInputFiles'         ,
+$win->AddButton(      -name        => 'btnInput'              ,
                       -size        => [ 22, 22]               ,
-                      -pos         => [557,120]               ,
-                      -bitmap      => $openFileBmp            ,
-                      -disabled    => 1                      ,
+                      -pos         => [557,115]               ,
+                      -bitmap      => $openDirBmp             ,
                       -tabstop     => 1                       , );
 
 # Filters
-$win->AddLabel(       -name        => 'lblFiltersT'          ,
-                      -size        => [$winWidth, 24]        ,
-                      -pos         => [  0,150]              ,
-                      -text        => ' '.$STR{'lblFiltersT'},
-                      -font        => $fontGB                ,
-                      -foreground  => [255, 255, 255]        ,
-                      -background  => [255, 210,  84]        , );
-$win->AddRadioButton( -name        => 'rbFiltersNone'        ,
-                      -size        => [110, 22]              ,
-                      -pos         => [  5,180]              ,
-                      -background  => [255, 255, 255]        ,
-                      -text        => $STR{'rbFiltersNone'}  ,
-                      -font        => $font10                ,
-                      -checked     => 1                      ,
-                      -group       => 1                      ,
-                      -tabstop     => 1                      , );
-$win->AddRadioButton( -name        => 'rbFiltersDirOnly'     ,
-                      -size        => [200, 22]              ,
-                      -pos         => [130,180]              ,
-                      -background  => [255, 255, 255]        ,
-                      -text        => $STR{'rbFiltersDirOnly'},
-                      -font        => $font10                ,
-                      -tabstop     => 1                      , );
-$win->AddRadioButton( -name        => 'rbFiltersSize'        ,
-                      -size        => [115, 22]              ,
-                      -pos         => [260,182]              ,
-                      -background  => [255, 255, 255]        ,
-                      -text        => $STR{'rbFiltersSize'}.':',
-                      -font        => $font10                ,
-                      -tabstop     => 1                      , );
-$win->AddCombobox(    -name        => 'cbFiltersSizeOp'      ,
-                      -size        => [110, 22]              ,
-                      -pos         => [355,180]              ,
-                      -font        => $font10                ,
-                      -dropdownlist => 1                     ,
-                      -disabled    => 1                      ,
-                      -tabstop     => 1                      , );
-$win->cbFiltersSizeOp->Add($STR{'Smaller'}, $STR{'Equal'}, $STR{'Bigger'}, );
-$win->cbFiltersSizeOp->SetCurSel(0);
-$win->AddTextfield(   -name        => 'tfFiltersSize'        ,
-                      -size        => [ 80, 24]              ,
-                      -pos         => [470,180]              ,
-                      -number      => 1                      ,
-                      -disabled    => 1                      ,
-                      -tabstop     => 1                      , );
-$win->AddCombobox(    -name        => 'cbFiltersSizeUnit'    ,
-                      -size        => [ 70, 22]              ,
-                      -pos         => [555,180]              ,
-                      -font        => $font10                ,
-                      -dropdownlist => 1                     ,
-                      -vscroll     => 1                      ,
-                      -disabled    => 1                      ,
-                      -tabstop     => 1                      , );
-$win->cbFiltersSizeUnit->Add($STR{'b'}, $STR{'Kb'}, $STR{'Mb'},$STR{'Gb'});
-$win->cbFiltersSizeUnit->SetCurSel(0);
-$win->AddRadioButton( -name        => 'rbFiltersContains'    ,
-                      -size        => [100, 22]              ,
-                      -pos         => [  5,211]              ,
-                      -background  => [255, 255, 255]        ,
-                      -text        => $STR{'rbFiltersContains'}.':',
-                      -font        => $font10                ,
-                      -tabstop     => 1                      , );
-$win->AddLabel(       -name        => 'lblFiltersContainOk'  ,
-                      -size        => [477, 24]              ,
-                      -pos         => [129,210]              ,
-                      -background  => [  0, 255,   0]        ,
-                      -visible     => 0                      , );
-$win->AddLabel(       -name        => 'lblFiltersContainErr' ,
-                      -size        => [477, 24]              ,
-                      -pos         => [129,210]              ,
-                      -background  => [255,   0,   0]        ,
-                      -visible     => 0                      , );
-$win->AddLabel(       -name        => 'lblFiltersContainWarn',
-                      -size        => [477, 24]              ,
-                      -pos         => [129,210]              ,
-                      -background  => [255, 255,   0]        ,
-                      -visible     => 0                      , );
-$win->AddTextfield(   -name        => 'tfFiltersContains'    ,
-                      -size        => [475, 22]              ,
-                      -pos         => [130,211]              ,
-                      -disabled    => 1                      ,
-                      -tabstop     => 1                      , );
-$win->AddCheckbox(    -name        => 'chFiltersContainsCase',
-                      -size        => [125, 22]               ,
-                      -pos         => [130,237]               ,
-                      -text        => $STR{'chFiltersContainsCase'},
-                      -background  => [255, 255, 255]         ,
-                      -font        => $font10                 ,
-                      -disabled    => 1                      ,
+$win->AddLabel(       -name        => 'lblFiltersT'           ,
+                      -size        => [$winWidth, 24]         ,
+                      -pos         => [  0,150]               ,
+                      -text        => ' '.$STR{'lblFiltersT'} ,
+                      -font        => $fontGB                 ,
+                      -foreground  => [255, 255, 255]         ,
+                      -background  => [255, 210,  84]         , );
+$win->AddGrid(        -name         => 'gridFilter'           ,
+                      -size         => [580, 70]              ,
+                      -pos          => [  5,185]              ,
+                      -background   => [255, 255, 255]        ,
+                      -columns      => 5                      ,
+                      -fixedrows    => 1                      ,
+                      -fixedcolumns => 0                      ,
+                      -editable     => 1                      , );
+$win->AddButton(      -name        => 'btnFilterSet'          ,
+                      -size        => [ 22, 22]               ,
+                      -pos         => [580,185]               ,
+                      -bitmap      => $filterSet              ,
+                      -tip         => $STR{'filterSetTip'}    ,
                       -tabstop     => 1                       , );
-$win->AddCheckbox(    -name        => 'chFiltersContainsRegex',
-                      -size        => [ 60, 22]               ,
-                      -pos         => [260,237]               ,
-                      -text        => $STR{'chFiltersContainsRegex'},
-                      -background  => [255, 255, 255]         ,
-                      -font        => $font10                 ,
+$win->AddButton(      -name        => 'btnFilterAdd'          ,
+                      -size        => [ 22, 22]               ,
+                      -pos         => [580,185]               ,
+                      -bitmap      => $filterAdd              ,
+                      -tip         => $STR{'filterAddTip'}    ,
                       -disabled    => 1                       ,
                       -tabstop     => 1                       , );
-$win->AddCheckbox(    -name        => 'chFiltersContainsFileOnly',
-                      -size        => [200, 22]               ,
-                      -pos         => [355,237]               ,
-                      -text        => $STR{'chFiltersContainsFileOnly'},
-                      -background  => [255, 255, 255]         ,
-                      -font        => $font10                 ,
+$win->AddButton(      -name        => 'btnFilterDel'          ,
+                      -size        => [ 22, 22]               ,
+                      -pos         => [580,185]               ,
+                      -bitmap      => $filterDel              ,
+                      -tip         => $STR{'filterDelTip'}    ,
                       -disabled    => 1                       ,
-                      -tabstop     => 1                       , );
-$win->AddRadioButton( -name        => 'rbFiltersLastAccess'   ,
-                      -size        => [120, 22]               ,
-                      -pos         => [  5,267]               ,
-                      -background  => [255, 255, 255]         ,
-                      -text        => $STR{'rbFiltersLastAccess'}.':',
-                      -font        => $font10                 ,
-                      -tabstop     => 1                       , );
-$win->AddCombobox(    -name        => 'cbFiltersLastAccess'   ,
-                      -size        => [ 80, 22]               ,
-                      -pos         => [130,265]               ,
-                      -font        => $font10                 ,
-                      -dropdownlist => 1                      ,
-                      -vscroll     => 1                       ,
-                      -disabled    => 1                      ,
-                      -tabstop     => 1                      , );
-$win->cbFiltersLastAccess->Add($STR{'Before'}, $STR{'Equal'}  ,
-                               $STR{'After'}                  , );
-$win->cbFiltersLastAccess->SetCurSel(0);
-$win->AddDateTime(    -name        => 'dtFiltersLastAccess'   ,
-                      -size        => [110, 24]               ,
-                      -pos         => [220,265]               ,
-                      -font        => $font10                 ,
-                      -background  => [255, 255, 255]         ,
-                      -format      => "shortdate"             ,
-                      -disabled    => 1                      ,
-                      -tabstop     => 1                       , );
-$win->AddRadioButton( -name        => 'rbFiltersLastModif'    ,
-                      -size        => [115, 22]               ,
-                      -pos         => [355,267]               ,
-                      -background  => [255, 255, 255]         ,
-                      -text        => $STR{'rbFiltersLastModif'}.':',
-                      -font        => $font10                 ,
-                      -tabstop     => 1                       , );
-$win->AddCombobox(    -name        => 'cbFiltersLastModif'    ,
-                      -size        => [ 80, 22]               ,
-                      -pos         => [475,265]               ,
-                      -font        => $font10                 ,
-                      -dropdownlist => 1                      ,
-                      -vscroll     => 1                       ,
-                      -disabled    => 1                      ,
-                      -tabstop     => 1                      , );
-$win->cbFiltersLastModif->Add($STR{'Before'}, $STR{'Equal'}  ,
-                              $STR{'After'}                  , );
-$win->cbFiltersLastModif->SetCurSel(0);
-$win->AddDateTime(    -name        => 'dtFiltersLastModif'    ,
-                      -size        => [110, 24]               ,
-                      -pos         => [565,265]               ,
-                      -font        => $font10                 ,
-                      -background  => [255, 255, 255]         ,
-                      -format      => "shortdate"             ,
-                      -disabled    => 1                      ,
                       -tabstop     => 1                       , );
 
 # Functions
@@ -406,59 +276,52 @@ $win->AddRadioButton(   -name         => 'rbListFiles'          ,
                         -group        => 1                      ,
                         -checked      => 1                      ,
                         -tabstop      => 1                      , );
-$win->AddCheckbox(      -name         => 'chListFilesOpt1'      , # Full path
+$win->AddCheckbox(      -name         => 'chListFilesOptFP'     , # Full path
                         -size         => [130, 22]              ,
                         -pos          => [180,360]              ,
-                        -text         => $STR{'chListFilesOpt1'},
+                        -text         => $STR{'chListFilesOptFP'},
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                ,
                         -tabstop      => 1                      , );
-$win->AddCheckbox(      -name         => 'chListFilesOpt2'      , # Filename
+$win->AddCheckbox(      -name         => 'chListFilesOptFN'     , # Filename
                         -size         => [130, 22]              ,
                         -pos          => [180,385]              ,
-                        -text         => $STR{'chListFilesOpt2'},
+                        -text         => $STR{'chListFilesOptFN'},
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                ,
                         -tabstop      => 1                      , );
-$win->AddCheckbox(      -name         => 'chListFilesOpt3'      , # MD5
-                        -size         => [ 80, 22]              ,
+$win->AddCheckbox(      -name         => 'chListFilesOptHV'     , # Hash values
+                        -size         => [140, 22]              ,
                         -pos          => [315,360]              ,
-                        -text         => $STR{'chListFilesOpt3'},
+                        -text         => $STR{'chListFilesOptHV'}.'...',
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                ,
                         -tabstop      => 1                      , );
-$win->AddCheckbox(      -name         => 'chListFilesOpt4'      , # SHA1
-                        -size         => [ 80, 22]              ,
+$win->AddCheckbox(      -name         => 'chListFilesOptFD'     , # File details
+                        -size         => [140, 22]              ,
                         -pos          => [315,385]              ,
-                        -text         => $STR{'chListFilesOpt4'},
+                        -text         => $STR{'chListFilesOptFD'}.'...',
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                ,
                         -tabstop      => 1                      , );
-$win->AddCheckbox(      -name         => 'chListFilesOpt5'      , # File details
-                        -size         => [145, 22]              ,
-                        -pos          => [430,360]              ,
-                        -text         => $STR{'chListFilesOpt5'},
+$win->AddCheckbox(      -name         => 'chListFilesOptNbrL'   , # Number of lines
+                        -size         => [165, 22]              ,
+                        -pos          => [460,360]              ,
+                        -text         => $STR{'chListFilesOptNbrL'},
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                ,
                         -tabstop      => 1                      , );
-$win->AddCheckbox(      -name         => 'chListFilesOpt6'      , # Number of lines
-                        -size         => [145, 22]              ,
-                        -pos          => [430,385]              ,
-                        -text         => $STR{'chListFilesOpt6'},
+$win->AddCheckbox(      -name         => 'chListFilesOptNH'     , # No header
+                        -size         => [150, 22]              ,
+                        -pos          => [630,360]              ,
+                        -text         => $STR{'chListFilesOptNH'},
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                ,
                         -tabstop      => 1                      , );
-$win->AddCheckbox(      -name         => 'chListFilesOpt7'      , # No header
-                        -size         => [130, 22]              ,
-                        -pos          => [580,360]              ,
-                        -text         => $STR{'chListFilesOpt7'},
-                        -background   => [255, 255, 255]        ,
-                        -font         => $font10                ,
-                        -tabstop      => 1                      , );
-$win->AddCheckbox(      -name         => 'chListFilesOpt8'      , # No folder
-                        -size         => [130, 22]              ,
-                        -pos          => [580,385]              ,
-                        -text         => $STR{'chListFilesOpt8'},
+$win->AddCheckbox(      -name         => 'chListFilesOptNF'     , # No folder
+                        -size         => [150, 22]              ,
+                        -pos          => [630,385]              ,
+                        -text         => $STR{'chListFilesOptNF'},
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                ,
                         -tabstop      => 1                      , );
@@ -477,13 +340,27 @@ $win->AddLabel(         -name         => 'lblReportDir'         ,
                         -font         => $font10                ,
                         -tabstop      => 1                      , );
 $win->AddTextfield(     -name         => 'tfReportDir'          ,
-                        -size         => [405, 22]              ,
+                        -size         => [315, 22]              ,
                         -pos          => [ 90,425]              ,
                         -tabstop      => 1                      , );
+$win->AddCombobox(      -name         => 'cbReportFormat'       ,
+                        -size         => [ 60, 22]              ,
+                        -pos          => [410,425]              ,
+                        -dropdownlist => 1                      ,
+                        -vscroll      => 1                      ,
+                        -tabstop      => 1                      , );
+$win->cbReportFormat->Add('TXT', 'HTML', 'XLSX'                 , );
 $win->AddButton(        -name         => 'btnReportDir'         ,
                         -size         => [ 22, 22]              ,
-                        -pos          => [497,425]              ,
+                        -pos          => [477,425]              ,
                         -bitmap       => $openDirBmp            ,
+                        -tip          => $STR{'selDirReport'}   ,
+                        -tabstop      => 1                      , );
+$win->AddButton(        -name         => 'btnOpenReportDir'     ,
+                        -size         => [ 22, 22]              ,
+                        -pos          => [499,425]              ,
+                        -bitmap       => $browseBmp             ,
+                        -tip          => $STR{'browseDirReport'},
                         -tabstop      => 1                      , );
 $win->AddCheckbox(      -name         => 'chOpenReport'         ,
                         -size         => [185, 22]              ,
@@ -568,14 +445,14 @@ $win->AddRadioButton(   -name         => 'rbRenByHash'          ,
                         -visible      => 0                      ,
                         -tabstop      => 1                      , );
 $win->AddCombobox(      -name         => 'cbRenByHash'          ,
-                        -size         => [ 60, 22]              ,
+                        -size         => [ 80, 22]              ,
                         -pos          => [120,360]              ,
                         -font         => $font10                ,
                         -dropdownlist => 1                      ,
                         -vscroll      => 1                      ,
                         -visible      => 0                      ,
                         -tabstop      => 1                      , );
-$win->cbRenByHash->Add( 'MD5', 'SHA1'                           , );
+$win->cbRenByHash->Add( 'MD5', 'SHA1', 'SHA256', 'SHA512',      , );
 $win->cbRenByHash->SetCurSel(0);
 $win->AddRadioButton(   -name         => 'rbRenSort'            ,
                         -size         => [110, 22]              ,
@@ -759,6 +636,207 @@ $win->AddButton(      -name        => 'btnAbout'              ,
                       -bitmap      => $aboutBmp               ,
                       -background  => [250, 250, 250]         ,
                       -tip         => $STR{'about'}           , );
+
+#------------------------------------------------------------------------------#
+# Filters window
+#------------------------------------------------------------------------------#
+
+my $winFilters = Win32::GUI::Window->new( -name        => 'winFilters'           ,
+                                          -background  => [255, 255, 255]        ,
+                                          -parent      => $win                   ,
+                                          -text        => $STR{'lblFiltersT'}    ,
+                                          -pos         => [$winPosX, $winPosY]   ,
+                                          -size        => [450, 250]             ,
+                                          -hasmaximize => 0                      ,
+                                          -hasminimize => 0                      ,
+                                          -resizable   => 0                      ,
+                                          -dialogui    => 1                      , );
+$winFilters->SetIcon($winICO);
+
+$winFilters->AddLabel(        -name         => 'lblFiltersOp'          ,
+                              -size         => [100, 22]               ,
+                              -pos          => [  5,  8]               ,
+                              -text         => $STR{'Operator'}.':'    ,
+                              -font         => $font10                 ,
+                              -background   => [255, 255, 255]         ,
+                              -disabled     => 1                       , );
+$winFilters->AddCombobox(     -name         => 'cbFiltersOp'           ,
+                              -size         => [ 60, 22]               ,
+                              -pos          => [110,  5]               ,
+                              -font         => $font10                 ,
+                              -dropdownlist => 1                       ,
+                              -disabled     => 1                       ,
+                              -tabstop      => 1                       , );
+$winFilters->cbFiltersOp->Add($STR{'OR'}, $STR{'AND'}, );
+$winFilters->cbFiltersOp->SetCurSel(0);
+$winFilters->AddLabel(        -name         => 'lblFiltersType'        ,
+                              -size         => [100, 22]               ,
+                              -pos          => [  5, 38]               ,
+                              -background   => [255, 255, 255]         ,
+                              -text         => $STR{'Type'}.':'        ,
+                              -font         => $font10                 , );
+$winFilters->AddCombobox(     -name         => 'cbFiltersType'         ,
+                              -size         => [110, 22]               ,
+                              -pos          => [110, 35]               ,
+                              -font         => $font10                 ,
+                              -dropdownlist => 1                       ,
+                              -tabstop      => 1                       , );
+$winFilters->cbFiltersType->Add($STR{'rbFiltersContains'}  ,
+                                $STR{'rbFiltersSize'   }   , $STR{'rbFiltersLastAccess'},
+                                $STR{'rbFiltersLastModif'} , $STR{'rbFiltersDirOnly'}   ,);
+$winFilters->cbFiltersType->SetCurSel(0);
+
+# Filter: Contains
+$winFilters->AddCheckbox(     -name         => 'chFiltersContainsCase' ,
+                              -size         => [125, 22]               ,
+                              -pos          => [  5, 70]               ,
+                              -text         => $STR{'chFiltersContainsCase'},
+                              -background   => [255, 255, 255]         ,
+                              -font         => $font10                 ,
+                              -tabstop      => 1                       , );
+$winFilters->AddCheckbox(     -name         => 'chFiltersContainsRegex',
+                              -size         => [ 60, 22]               ,
+                              -pos          => [135, 70]               ,
+                              -text         => $STR{'chFiltersContainsRegex'},
+                              -background   => [255, 255, 255]         ,
+                              -font         => $font10                 ,
+                              -tabstop      => 1                       , );
+$winFilters->AddCheckbox(     -name         => 'chFiltersContainsFileOnly',
+                              -size         => [200, 22]               ,
+                              -pos          => [230, 70]               ,
+                              -text         => $STR{'chFiltersContainsFileOnly'},
+                              -background   => [255, 255, 255]         ,
+                              -font         => $font10                 ,
+                              -tabstop      => 1                       , );
+$winFilters->AddLabel(        -name         => 'lblFiltersContainOk'   ,
+                              -size         => [432, 72]               ,
+                              -pos          => [  4, 94]               ,
+                              -background   => [  0, 255,   0]         ,
+                              -visible      => 0                       , );
+$winFilters->AddLabel(        -name         => 'lblFiltersContainErr'  ,
+                              -size         => [432, 72]               ,
+                              -pos          => [  4, 94]               ,
+                              -background   => [255,   0,   0]         ,
+                              -visible      => 0                       , );
+$winFilters->AddLabel(        -name         => 'lblFiltersContainWarn' ,
+                              -size         => [432, 72]               ,
+                              -pos          => [  4, 94]               ,
+                              -background   => [255, 255,   0]         ,
+                              -visible      => 0                       , );
+$winFilters->AddTextfield(    -name         => 'tfFiltersContains'     ,
+                              -size         => [430, 70]               ,
+                              -pos          => [  5, 95]               ,
+                              -multiline    => 1                       ,
+                              -wantreturn   => 1                       ,
+                              -vscroll      => 1                       ,
+                              -autohscroll  => 1                       ,
+                              -tabstop      => 1                       , );
+$winFilters->tfFiltersContains->MaxLength(5000000);
+
+# Filter: File size
+$winFilters->AddCombobox(     -name         => 'cbFiltersSizeOp'       ,
+                              -size         => [110, 22]               ,
+                              -pos          => [110, 65]               ,
+                              -font         => $font10                 ,
+                              -dropdownlist => 1                       ,
+                              -visible      => 0                       ,
+                              -tabstop      => 1                       , );
+$winFilters->cbFiltersSizeOp->Add($STR{'Smaller'}, $STR{'Equal'}, $STR{'Bigger'}, );
+$winFilters->cbFiltersSizeOp->SetCurSel(0);
+$winFilters->AddTextfield(    -name         => 'tfFiltersSize'         ,
+                              -size         => [ 80, 24]               ,
+                              -pos          => [225, 65]               ,
+                              -number       => 1                       ,
+                              -visible      => 0                       ,
+                              -tabstop      => 1                       , );
+$winFilters->AddCombobox(     -name         => 'cbFiltersSizeUnit'     ,
+                              -size         => [ 80, 22]               ,
+                              -pos          => [310, 65]               ,
+                              -font         => $font10                 ,
+                              -dropdownlist => 1                       ,
+                              -vscroll      => 1                       ,
+                              -visible      => 0                       ,
+                              -tabstop      => 1                       , );
+$winFilters->cbFiltersSizeUnit->Add($STR{'b'}, $STR{'Kb'}, $STR{'Mb'},$STR{'Gb'});
+$winFilters->cbFiltersSizeUnit->SetCurSel(0);
+$winFilters->AddLabel(        -name         => 'lblFilterItemList'     ,
+                              -size         => [ 60, 22]               ,
+                              -pos          => [  5, 95]               ,
+                              -background   => [255, 255, 255]         ,
+                              -text         => 'List:'                 ,
+                              -font         => $font10                 ,
+                              -visible      => 0                       ,
+                              -disabled     => 1                       , );
+$winFilters->AddTextfield(    -name         => 'tfFilterItemList'      ,
+                              -size         => [280, 70]               ,
+                              -pos          => [110, 95]               ,
+                              -multiline    => 1                       ,
+                              -wantreturn   => 1                       ,
+                              -vscroll      => 1                       ,
+                              -autohscroll  => 1                       ,
+                              -visible      => 0                       ,
+                              -disabled     => 1                       ,
+                              -tabstop      => 1                       , );
+$winFilters->tfFilterItemList->MaxLength(5000000);
+
+# Filter: Last accessed
+$winFilters->AddCombobox(     -name         => 'cbFiltersLastAccess'   ,
+                              -size         => [110, 22]               ,
+                              -pos          => [110, 65]               ,
+                              -font         => $font10                 ,
+                              -dropdownlist => 1                       ,
+                              -vscroll      => 1                       ,
+                              -visible      => 0                       ,
+                              -tabstop      => 1                       , );
+$winFilters->cbFiltersLastAccess->Add($STR{'Before'}, $STR{'Equal'}    ,
+                                      $STR{'After'}                    , );
+$winFilters->cbFiltersLastAccess->SetCurSel(0);
+$winFilters->AddDateTime(     -name         => 'dtFiltersLastAccess'   ,
+                              -size         => [110, 24]               ,
+                              -pos          => [225, 65]               ,
+                              -font         => $font10                 ,
+                              -background   => [255, 255, 255]         ,
+                              -format       => "shortdate"             ,
+                              -visible      => 0                       ,
+                              -tabstop      => 1                       , );
+
+# Filter: Last modified
+$winFilters->AddCombobox(     -name         => 'cbFiltersLastModif'    ,
+                              -size         => [110, 22]               ,
+                              -pos          => [110, 65]               ,
+                              -font         => $font10                 ,
+                              -dropdownlist => 1                       ,
+                              -vscroll      => 1                       ,
+                              -visible      => 0                       ,
+                              -tabstop      => 1                       , );
+$winFilters->cbFiltersLastModif->Add($STR{'Before'}, $STR{'Equal'}     ,
+                                     $STR{'After'}                     , );
+$winFilters->cbFiltersLastModif->SetCurSel(0);
+$winFilters->AddDateTime(     -name         => 'dtFiltersLastModif'    ,
+                              -size         => [110, 24]               ,
+                              -pos          => [225, 65]               ,
+                              -font         => $font10                 ,
+                              -background   => [255, 255, 255]         ,
+                              -format       => "shortdate"             ,
+                              -visible      => 0                       ,
+                              -tabstop      => 1                       , );
+
+$winFilters->AddButton(       -name         => 'btnFilterNotReady'     ,
+                              -size         => [ 30, 30]               ,
+                              -pos          => [ 85,180]               ,
+                              -text         => '?'                     ,
+                              -font         => $font10                 , );
+$winFilters->AddButton(       -name         => 'btnFilterOk'           ,
+                              -size         => [100, 30]               ,
+                              -pos          => [130,180]               ,
+                              -text         => $STR{'SetAddFilter'}    ,
+                              -font         => $font10                 ,
+                              -disabled     => 1                       , );
+$winFilters->AddButton(       -name         => 'btnFilterCancel'       ,
+                              -size         => [100, 30]               ,
+                              -pos          => [245,180]               ,
+                              -text         => $STR{'cancel'}          ,
+                              -font         => $font10                 , );
 
 #------------------------------------------------------------------------------#
 # Rename - BySort Options window
@@ -947,6 +1025,101 @@ $winRenBySortOpt->AddButton(      -name        => 'btnWinRenBySortOptOk' ,
                                   -default     => 1                      , );
 
 #------------------------------------------------------------------------------#
+# Hash values options window
+#------------------------------------------------------------------------------#
+
+my $winHashVal = Win32::GUI::Window->new( -name        => 'winHashVal'           ,
+                                          -background  => [255, 255, 255]        ,
+                                          -parent      => $win                   ,
+                                          -text        => $STR{'chListFilesOptHV'},
+                                          -pos         => [$winPosX, $winPosY]   ,
+                                          -size        => [220, 120]             ,
+                                          -hasmaximize => 0                      ,
+                                          -hasminimize => 0                      ,
+                                          -resizable   => 0                      ,
+                                          -dialogui    => 1                      , );
+$winHashVal->SetIcon($winICO);
+
+$winHashVal->AddCheckbox( -name         => 'chListFilesHV1'       , # MD5
+                          -size         => [ 90, 22]              ,
+                          -pos          => [  5,  5]              ,
+                          -text         => $STR{'chListFilesHV1'} ,
+                          -background   => [255, 255, 255]        ,
+                          -font         => $font10                ,
+                          -tabstop      => 1                      , );
+$winHashVal->AddCheckbox( -name         => 'chListFilesHV2'       , # SHA1
+                          -size         => [ 90, 22]              ,
+                          -pos          => [  5, 30]              ,
+                          -text         => $STR{'chListFilesHV2'},
+                          -background   => [255, 255, 255]        ,
+                          -font         => $font10                ,
+                          -tabstop      => 1                      , );
+$winHashVal->AddCheckbox( -name         => 'chListFilesHV3'       , # SHA256
+                          -size         => [100, 22]              ,
+                          -pos          => [100,  5]              ,
+                          -text         => $STR{'chListFilesHV3'} ,
+                          -background   => [255, 255, 255]        ,
+                          -font         => $font10                ,
+                          -tabstop      => 1                      , );
+$winHashVal->AddCheckbox( -name         => 'chListFilesHV4'       , # SHA512
+                          -size         => [100, 22]              ,
+                          -pos          => [100, 30]              ,
+                          -text         => $STR{'chListFilesHV4'} ,
+                          -background   => [255, 255, 255]        ,
+                          -font         => $font10                ,
+                          -tabstop      => 1                      , );
+$winHashVal->AddButton(   -name         => 'btnHashValuesOk'      ,
+                          -text         => $STR{'Ok'}             ,
+                          -size         => [ 60, 25]              ,
+                          -pos          => [ 80, 60]              ,
+                          -ok           => 1                      ,
+                          -default      => 1                      , );
+
+#------------------------------------------------------------------------------#
+# File details options window
+#------------------------------------------------------------------------------#
+
+my $winFileDetails = Win32::GUI::Window->new( -name        => 'winFileDetails'       ,
+                                              -background  => [255, 255, 255]        ,
+                                              -parent      => $win                   ,
+                                              -text        => $STR{'chListFilesOptFD'},
+                                              -pos         => [$winPosX, $winPosY]   ,
+                                              -size        => [200, 145]             ,
+                                              -hasmaximize => 0                      ,
+                                              -hasminimize => 0                      ,
+                                              -resizable   => 0                      ,
+                                              -dialogui    => 1                      , );
+$winFileDetails->SetIcon($winICO);
+
+$winFileDetails->AddCheckbox( -name         => 'chListFilesFD1'       , # File size
+                              -size         => [180, 22]              ,
+                              -pos          => [  5,  5]              ,
+                              -text         => $STR{'rbFiltersSize'}  ,
+                              -background   => [255, 255, 255]        ,
+                              -font         => $font10                ,
+                              -tabstop      => 1                      , );
+$winFileDetails->AddCheckbox( -name         => 'chListFilesFD2'       , # Last accessed
+                              -size         => [180, 22]              ,
+                              -pos          => [  5, 30]              ,
+                              -text         => $STR{'rbFiltersLastAccess'},
+                              -background   => [255, 255, 255]        ,
+                              -font         => $font10                ,
+                              -tabstop      => 1                      , );
+$winFileDetails->AddCheckbox( -name         => 'chListFilesFD3'       , # Last modified
+                              -size         => [180, 22]              ,
+                              -pos          => [  5, 55]              ,
+                              -text         => $STR{'rbFiltersLastModif'},
+                              -background   => [255, 255, 255]        ,
+                              -font         => $font10                ,
+                              -tabstop      => 1                      , );
+$winFileDetails->AddButton(   -name         => 'btnFileDetailsOk'     ,
+                              -text         => $STR{'Ok'}             ,
+                              -size         => [ 60, 25]              ,
+                              -pos          => [ 70, 85]              ,
+                              -ok           => 1                      ,
+                              -default      => 1                      , );
+
+#------------------------------------------------------------------------------#
 # Preview window
 #------------------------------------------------------------------------------#
 
@@ -1127,12 +1300,19 @@ $winConfig->AddCheckbox(    -name        => 'chHashLowercase'       ,
 
 # Logging tab
 $winConfig->AddCheckbox(    -name        => 'chEnableLogging'       ,
-                            -size        => [350, 20]               ,
+                            -size        => [200, 20]               ,
                             -pos         => [150, 40]               ,
                             -background  => [255, 255, 255]         ,
                             -text        => $STR{'chEnableLogging'} ,
                             -font        => $font10                 ,
                             -checked     => 1                       ,
+                            -visible     => 0                       ,
+                            -tabstop     => 1                       , );
+$winConfig->AddButton(      -name        => 'btnOpenLog'            ,
+                            -size        => [150, 24]               ,
+                            -pos         => [400, 38]               ,
+                            -text        => $STR{'OpenLog'}         ,
+                            -font        => $font10                 ,
                             -visible     => 0                       ,
                             -tabstop     => 1                       , );
 $winConfig->AddRadioButton( -name        => 'rbUseDefaultDir'       ,
@@ -1225,9 +1405,42 @@ $winPb->AddButton(      -name        => 'btnCancel'      ,
 if (-T $CONFIG_FILE) {
   &loadConfig(\%CONFIG);
   
-  if ($CONFIG{'TOOL_AUTO_UPDATE'}) {
-    $THR_UPDATE = threads->create(sub { &updateTool(0); });
+  if ($CONFIG{'TOOL_AUTO_UPDATE'}) { $THR_UPDATE = threads->create(sub { &updateTool(0); }); }
+  
+  # Set input (objects sent)
+  if ($$REF_ARG[0]) {
+    if (!$$REF_ARG[1]) {
+      if    (-d $$REF_ARG[0]) {             # A folder
+        $win->tfInput->Text($$REF_ARG[0]);
+        $win->rbInputDir->Checked(1);
+        $win->rbInputFiles->Checked(0);
+        &rbInputDir_Click();
+      } else {                              # Single file
+        $win->tfInput->Text($$REF_ARG[0]);
+        $win->rbInputDir->Checked(0);
+        $win->rbInputFiles->Checked(1);
+        &rbInputFiles_Click();
+      }
+    } else {                                # Multiple files
+      my $argStr;
+      my @path = split(/\\/, $$REF_ARG[1]);
+      pop(@path);
+      $argStr = '"'.join("\\", @path).'" ';
+      foreach my $file (@$REF_ARG) { $argStr .= '"'.(split(/\\/, $file))[-1].'" '; }
+      chop($argStr);
+      $win->tfInput->Text($argStr);
+      $win->rbInputDir->Checked(0);
+      $win->rbInputFiles->Checked(1);
+      &rbInputFiles_Click();
+    }
   }
+  
+  # Set Filter grid header
+  $win->gridFilter->SetCellText(0, 0, $STR{'Operator'} );
+  $win->gridFilter->SetCellText(0, 1, $STR{'Type'}     );
+  $win->gridFilter->SetCellText(0, 2, $STR{'TypeOp'}   );
+  $win->gridFilter->SetCellText(0, 3, $STR{'flags'}    );
+  $win->gridFilter->SetCellText(0, 4, $STR{'searchStr'});
 }
 
 $START = 1;
@@ -1243,40 +1456,81 @@ sub winMain_Resize
   $win->lblHeader->Width($win->ScaleWidth()-300);
   # Input section
   $win->lblInputT->Width($win->ScaleWidth());
-  $win->tfInputDir->Width($win->ScaleWidth()-259);
-  $win->btnInputDir->Left($win->ScaleWidth()-167);
+  $win->tfInput->Width($win->ScaleWidth()-174);
+  $win->btnInput->Left($win->ScaleWidth()-167);
   $win->chInputDirRecurse->Left($win->ScaleWidth()-142);
-  $win->tfInputFiles->Width($win->ScaleWidth()-259);
-  $win->btnInputFiles->Left($win->ScaleWidth()-167);
   # Filters section
   $win->lblFiltersT->Width($win->ScaleWidth());
-  $win->rbFiltersSize->Left($win->ScaleWidth()/2-20);
-  $win->cbFiltersSizeOp->Left($win->ScaleWidth()/2+100);
-  $win->tfFiltersSize->Left($win->ScaleWidth()/2+215);
-  $win->cbFiltersSizeUnit->Left($win->ScaleWidth()/2+300);
-  $win->lblFiltersContainOk->Width($win->ScaleWidth()-148);
-  $win->lblFiltersContainErr->Width($win->ScaleWidth()-148);
-  $win->lblFiltersContainWarn->Width($win->ScaleWidth()-148);
-  $win->tfFiltersContains->Width($win->ScaleWidth()-150);
-  $win->rbFiltersLastModif->Left($win->ScaleWidth()/2-20);
-  $win->cbFiltersLastModif->Left($win->ScaleWidth()/2+100);
-  $win->dtFiltersLastModif->Left($win->ScaleWidth()/2+190);  
+  $win->gridFilter->Width($win->ScaleWidth()-78);
+  $win->gridFilter->Height($win->ScaleHeight()-400);
+  $win->gridFilter->AutoSizeColumns();
+  $win->gridFilter->ExpandLastColumn();
+  $win->gridFilter->Refresh();
+  $win->btnFilterSet->Left($win->ScaleWidth()-71);
+  $win->btnFilterAdd->Left($win->ScaleWidth()-48);
+  $win->btnFilterDel->Left($win->ScaleWidth()-25);
   # Functions section
   $win->lblFunctionsT->Width($win->ScaleWidth());
-  $win->TabFunctions->Width($win->ScaleWidth()+2);
-  $win->TabFunctions->Height($win->ScaleHeight()-381);
-  $win->tfReportDir->Width($win->ScaleWidth()-309);
-  $win->btnReportDir->Left($win->ScaleWidth()-217);
+  $win->lblFunctionsT->Top($win->ScaleHeight()-205);
+  $win->TabFunctions->Width($win->ScaleWidth()+3);
+  $win->TabFunctions->Height($win->ScaleHeight()-200);
+  $win->TabFunctions->Top($win->ScaleHeight()-180);
+  $win->rbListFiles->Top($win->ScaleHeight()-145);
+  $win->chListFilesOptFP->Top($win->ScaleHeight()-145);
+  $win->chListFilesOptFN->Top($win->ScaleHeight()-120);
+  $win->chListFilesOptHV->Top($win->ScaleHeight()-145);
+  $win->chListFilesOptFD->Top($win->ScaleHeight()-120);
+  $win->chListFilesOptNbrL->Top($win->ScaleHeight()-145);
+  $win->chListFilesOptNH->Top($win->ScaleHeight()-145);
+  $win->chListFilesOptNF->Top($win->ScaleHeight()-120);
+  $win->rbListExt->Top($win->ScaleHeight()-120);
+  $win->lblReportDir->Top($win->ScaleHeight()-82);
+  $win->tfReportDir->Top($win->ScaleHeight()-85);
+  $win->tfReportDir->Width($win->ScaleWidth()-396);
+  $win->cbReportFormat->Top($win->ScaleHeight()-85);
+  $win->cbReportFormat->Left($win->ScaleWidth()-302);
+  $win->btnReportDir->Top($win->ScaleHeight()-85);
+  $win->btnReportDir->Left($win->ScaleWidth()-240);
+  $win->btnOpenReportDir->Top($win->ScaleHeight()-85);
+  $win->btnOpenReportDir->Left($win->ScaleWidth()-217);
+  $win->chOpenReport->Top($win->ScaleHeight()-85);
   $win->chOpenReport->Left($win->ScaleWidth()-190);
+  # Copy/move tab
+  $win->rbCopy->Top($win->ScaleHeight()-145);
+  $win->rbMove->Top($win->ScaleHeight()-120);
+  $win->chCopyTree->Top($win->ScaleHeight()-145);
+  $win->chCopyRemDouble->Top($win->ScaleHeight()-120);
+  $win->lblDestination->Top($win->ScaleHeight()-82);
+  $win->tfDestinationDir->Top($win->ScaleHeight()-85);
   $win->tfDestinationDir->Width($win->ScaleWidth()-309);
+  $win->btnDestinationDir->Top($win->ScaleHeight()-85);
   $win->btnDestinationDir->Left($win->ScaleWidth()-217);
+  $win->chOpenDstDir->Top($win->ScaleHeight()-85);
   $win->chOpenDstDir->Left($win->ScaleWidth()-190);
+  # Rename tab
+  $win->rbRenByHash->Top($win->ScaleHeight()-145);
+  $win->cbRenByHash->Top($win->ScaleHeight()-145);
+  $win->rbRenSort->Top($win->ScaleHeight()-145);
   $win->rbRenSort->Left($win->ScaleWidth()/2);
+  $win->btnRenSort->Top($win->ScaleHeight()-145);
   $win->btnRenSort->Left($win->ScaleWidth()/2+115);
+  $win->rbRenReplace->Top($win->ScaleHeight()-115);
+  $win->lblRenReplaceOk->Top($win->ScaleHeight()-116);
+  $win->lblRenReplaceErr->Top($win->ScaleHeight()-116);
+  $win->lblRenReplaceWarn->Top($win->ScaleHeight()-116);
+  $win->tfRenReplace->Top($win->ScaleHeight()-115);
   $win->lblRenReplaceOk->Width($win->ScaleWidth()/2-73);
   $win->lblRenReplaceErr->Width($win->ScaleWidth()/2-73);
   $win->lblRenReplaceWarn->Width($win->ScaleWidth()/2-73);
   $win->tfRenReplace->Width($win->ScaleWidth()/2-75);
+  $win->chRenReplaceRegex->Top($win->ScaleHeight()-90);
+  $win->chRenReplaceCase->Top($win->ScaleHeight()-90);
+  $win->chRenReplaceFolder->Top($win->ScaleHeight()-90);
+  $win->lblRenReplaceBy->Top($win->ScaleHeight()-115);
+  $win->lblRenReplaceByOk->Top($win->ScaleHeight()-116);
+  $win->lblRenReplaceByErr->Top($win->ScaleHeight()-116);
+  $win->lblRenReplaceByWarn->Top($win->ScaleHeight()-116);
+  $win->tfRenReplaceBy->Top($win->ScaleHeight()-115);
   $win->lblRenReplaceBy->Left($win->ScaleWidth()/2+70);
   $win->tfRenReplaceBy->Left($win->ScaleWidth()/2+115);
   $win->tfRenReplaceBy->Width($win->ScaleWidth()/2-135);
@@ -1286,6 +1540,7 @@ sub winMain_Resize
   $win->lblRenReplaceByOk->Left($win->ScaleWidth()/2+114);
   $win->lblRenReplaceByErr->Left($win->ScaleWidth()/2+114);
   $win->lblRenReplaceByWarn->Left($win->ScaleWidth()/2+114);
+  $win->chRenReplaceByEval->Top($win->ScaleHeight()-90);
   $win->chRenReplaceByEval->Left($win->ScaleWidth()/2+115);
   # Footer
   $win->lblFooter->Top($win->ScaleHeight()-55);
@@ -1311,52 +1566,103 @@ sub rbInputDir_Click
 #--------------------------#
 {
   # Enable InputDir options
-  $win->tfInputDir->Enable();
-  $win->btnInputDir->Enable();
   $win->chInputDirRecurse->Enable();
   
-  # Disable InputFiles options
-  $win->tfInputFiles->Disable();
-  $win->tfInputFiles->Text('');
-  $win->btnInputFiles->Disable();
-  
   # Enable filters
-  $win->rbFiltersDirOnly->Enable;
-  $win->rbFiltersSize->Enable;
-  $win->rbFiltersContains->Enable;
-  $win->rbFiltersLastAccess->Enable;
-  $win->rbFiltersLastModif->Enable;
+  $win->btnFilterSet->Enable();
 
 }  #--- End rbInputDir_Click
 
 #--------------------------#
-sub btnInputDir_Click
+sub tfInput_Change
+#--------------------------#
+{
+  &isProcessReady(0);
+
+}  #--- End tfInput_Change
+
+#--------------------------#
+sub btnInput_Click
 #--------------------------#
 {
   # Local variables
-  my $lastDir = $win->tfInputDir->Text();
+  my $lastDir = $win->tfInput->Text();
   my $dir;
 
-  # Show dialog window
-  if ($lastDir) {
-    my(@parts) = split(/\\/, $lastDir);
-    if (pop(@parts) =~ /\./) {
-      while ($lastDir =~ /[^\\]$/) { chop($lastDir); }
+  if ($win->rbInputDir->Checked()) {
+    # Show dialog window
+    if ($lastDir) {
+      my(@parts) = split(/\\/, $lastDir);
+      if (pop(@parts) =~ /\./) {
+        while ($lastDir =~ /[^\\]$/) { chop($lastDir); }
+      }
+      $dir = Win32::GUI::BrowseForFolder( -owner      => $win              ,
+                                          -title      => $STR{'selDir'}.':',
+                                          -folderonly => 1                 ,
+                                          -directory  => $lastDir          ,);
+    } else {
+      $dir = Win32::GUI::BrowseForFolder( -owner      => $win              ,
+                                          -title      => $STR{'selDir'}.':',
+                                          -folderonly => 1                 , );
     }
-    $dir = Win32::GUI::BrowseForFolder( -owner      => $win              ,
-                                        -title      => $STR{'selDir'}.':',
-                                        -folderonly => 1                 ,
-                                        -directory  => $lastDir          ,);
+  
+    # Selected folder
+    if ($dir and -d $dir) {
+      if ($dir =~ /\\$/) { chop($dir); }
+      $win->tfInput->Text($dir);
+    }
   } else {
-    $dir = Win32::GUI::BrowseForFolder( -owner      => $win              ,
-                                        -title      => $STR{'selDir'}.':',
-                                        -folderonly => 1                 , );
-  }
-
-  # Selected folder
-  if ($dir and -d $dir) {
-    if ($dir =~ /\\$/) { chop($dir); }
-    $win->tfInputDir->Text($dir);
+    my @filesStr;
+  
+    # Show OpenFile dialog window
+    if ($lastDir and !-d $lastDir) {
+      # Multiple files
+      if ($lastDir =~ /" "/) { $lastDir = (split(/" "/, $lastDir))[0]; }
+      # Single file
+      my @parts = split(/ /, $lastDir);
+      if (pop(@parts) =~ /\./) {
+        while ($lastDir =~ /[^\\]$/) { chop($lastDir); }
+      }
+      @filesStr = Win32::GUI::GetOpenFileName(  -owner         => $win                 ,
+                                                -title         => $STR{'selFiles'}.':' ,
+                                                -defaultfilter => 0                    ,
+                                                -filemustexist => 1                    ,
+                                                -multisel      => 1                    ,
+                                                -directory     => $lastDir             ,
+                                                -explorer      => 1                    , );
+    } elsif (-d $lastDir) {
+      my(@parts) = split(/\\/, $lastDir);
+      if (pop(@parts) =~ /\./) {
+        while ($lastDir =~ /[^\\]$/) { chop($lastDir); }
+      }
+      @filesStr = Win32::GUI::GetOpenFileName(  -owner         => $win                 ,
+                                                -title         => $STR{'selFiles'}.':' ,
+                                                -defaultfilter => 0                    ,
+                                                -filemustexist => 1                    ,
+                                                -multisel      => 1                    ,
+                                                -directory     => $lastDir             ,
+                                                -explorer      => 1                    , );
+    } else {
+      @filesStr = Win32::GUI::GetOpenFileName(  -owner         => $win                 ,
+                                                -title         => $STR{'selFiles'}.':' ,
+                                                -defaultfilter => 0                    ,
+                                                -filemustexist => 1                    ,
+                                                -multisel      => 1                    ,
+                                                -explorer      => 1                    , );
+    }
+  
+    # Selected file
+    if ($filesStr[0] and scalar(@filesStr) > 0) {
+      # Single file
+      if ($filesStr[0] and scalar(@filesStr) == 1) { $win->tfInput->Text($filesStr[0]); }
+      # Multiple files
+      else {
+        my $filesStr;
+        foreach my $file (@filesStr) { $filesStr .= "\"$file\" "; }
+        chop($filesStr);
+        $win->tfInput->Text($filesStr);
+      }
+    }
   }
   
   &isProcessReady(0);
@@ -1368,481 +1674,730 @@ sub rbInputFiles_Click
 #--------------------------#
 {
   # Enable InputFiles options
-  $win->tfInputFiles->Enable();
-  $win->btnInputFiles->Enable();
-  
-  # Enable InputDir options
-  $win->tfInputDir->Disable();
-  $win->tfInputDir->Text('');
-  $win->btnInputDir->Disable();
   $win->chInputDirRecurse->Disable();
   
   # Disable filters
-  $win->rbFiltersNone->Checked(1);
-  $win->rbFiltersDirOnly->Checked(0);
-  $win->rbFiltersDirOnly->Disable;
-  $win->rbFiltersSize->Checked(0);
-  $win->rbFiltersSize->Disable;
-  $win->rbFiltersContains->Checked(0);
-  $win->rbFiltersContains->Disable;
-  $win->rbFiltersLastAccess->Checked(0);
-  $win->rbFiltersLastAccess->Disable;
-  $win->rbFiltersLastModif->Checked(0);
-  $win->rbFiltersLastModif->Disable;
-  &selectFilter();
+  $win->btnFilterSet->Disable();
 
 }  #--- End rbInputFiles_Click
 
 #--------------------------#
-sub btnInputFiles_Click
+sub btnFilterSet_Click
+#--------------------------#
+{
+  # Reset Filter window controls
+  $winFilters->cbFiltersOp->SetCurSel(0);
+  $winFilters->cbFiltersOp->Disable();
+  $winFilters->cbFiltersType->SetCurSel(0);
+  &cbFiltersType_Change();
+  $winFilters->lblFiltersContainOk->Hide();
+  $winFilters->lblFiltersContainErr->Hide();
+  $winFilters->lblFiltersContainWarn->Hide();
+  $winFilters->chFiltersContainsCase->Checked(0);
+  $winFilters->chFiltersContainsRegex->Checked(0);
+  $winFilters->chFiltersContainsFileOnly->Checked(0);
+  $winFilters->tfFiltersContains->Text('');
+  &OnlyFoldersOff();
+    
+  $winFilters->Center($win);
+  $winFilters->Show();
+  $win->Disable();
+
+}  #--- End btnFilterSet_Click
+
+#--------------------------#
+sub btnFilterAdd_Click
+#--------------------------#
+{
+  # Reset Filter window controls
+  $winFilters->cbFiltersOp->SetCurSel(0);
+  $winFilters->cbFiltersOp->Enable();
+  $winFilters->cbFiltersType->SetCurSel(0);
+  &cbFiltersType_Change();
+  $winFilters->chFiltersContainsCase->Checked(0);
+  $winFilters->chFiltersContainsRegex->Checked(0);
+  $winFilters->chFiltersContainsFileOnly->Checked(0);
+  $winFilters->tfFiltersContains->Text('');
+  
+  $winFilters->Center($win);
+  $winFilters->Show();
+  $win->Disable();
+
+}  #--- End btnFilterAdd_Click
+
+#--------------------------#
+sub cbFiltersType_Change
 #--------------------------#
 {
   # Local variables
-  my $lastFiles = $win->tfInputFiles->Text();
-  my $lastDir   = $win->tfInputDir->Text();
-  my @filesStr;
-
-  # Show OpenFile dialog window
-  if ($lastFiles) {
-    # Multiple files
-    if ($lastFiles =~ /" "/) { $lastDir = (split(/" "/, $lastFiles))[0]; }
-    # Single file
-    else { $lastDir = $lastFiles; }
-    my @parts = split(/ /, $lastDir);
-    if (pop(@parts) =~ /\./) {
-      while ($lastDir =~ /[^\\]$/) { chop($lastDir); }
-    }
-    @filesStr = Win32::GUI::GetOpenFileName(  -owner         => $win                 ,
-                                              -title         => $STR{'selFiles'}.':' ,
-                                              -defaultfilter => 0                    ,
-                                              -filemustexist => 1                    ,
-                                              -multisel      => 1                    ,
-                                              -directory     => $lastDir             ,
-                                              -explorer      => 1                    , );
-  } elsif ($lastDir) {
-    my(@parts) = split(/\\/, $lastDir);
-    if (pop(@parts) =~ /\./) {
-      while ($lastDir =~ /[^\\]$/) { chop($lastDir); }
-    }
-    @filesStr = Win32::GUI::GetOpenFileName(  -owner         => $win                 ,
-                                              -title         => $STR{'selFiles'}.':' ,
-                                              -defaultfilter => 0                    ,
-                                              -filemustexist => 1                    ,
-                                              -multisel      => 1                    ,
-                                              -directory     => $lastDir             ,
-                                              -explorer      => 1                    , );
+  my $type = $winFilters->cbFiltersType->GetCurSel();
+  
+  # Contains
+  if ($type == 0) {
+    $winFilters->chFiltersContainsCase->Show();
+    $winFilters->chFiltersContainsRegex->Show();
+    $winFilters->chFiltersContainsFileOnly->Show();
+    $winFilters->tfFiltersContains->Show();
+    $winFilters->btnFilterOk->Disable();
+    
+    # Hide File size options
+    $winFilters->cbFiltersSizeOp->Hide();
+    $winFilters->tfFiltersSize->Hide();
+    $winFilters->cbFiltersSizeUnit->Hide();
+    $winFilters->lblFilterItemList->Hide();
+    $winFilters->tfFilterItemList->Hide();
+    
+    # Hide Last accessed options
+    $winFilters->cbFiltersLastAccess->Hide();
+    $winFilters->dtFiltersLastAccess->Hide();
+    
+    # Hide Last modified options
+    $winFilters->cbFiltersLastModif->Hide();
+    $winFilters->dtFiltersLastModif->Hide();
+    
+  # File size
+  } elsif ($type == 1) {
+    $winFilters->cbFiltersSizeOp->Show();
+    $winFilters->tfFiltersSize->Show();
+    $winFilters->cbFiltersSizeUnit->Show();
+    $winFilters->lblFilterItemList->Show();
+    $winFilters->tfFilterItemList->Show();
+    $winFilters->btnFilterOk->Disable();
+    
+    # Hide Contains options
+    $winFilters->chFiltersContainsCase->Hide();
+    $winFilters->chFiltersContainsRegex->Hide();
+    $winFilters->chFiltersContainsFileOnly->Hide();
+    $winFilters->lblFiltersContainOk->Hide();
+    $winFilters->lblFiltersContainErr->Hide();
+    $winFilters->lblFiltersContainWarn->Hide();
+    $winFilters->tfFiltersContains->Hide();
+    
+    # Hide Last accessed options
+    $winFilters->cbFiltersLastAccess->Hide();
+    $winFilters->dtFiltersLastAccess->Hide();
+    
+    # Hide Last modified options
+    $winFilters->cbFiltersLastModif->Hide();
+    $winFilters->dtFiltersLastModif->Hide();
+    
+  # Last accessed
+  } elsif ($type == 2) {
+    $winFilters->cbFiltersLastAccess->Show();
+    $winFilters->dtFiltersLastAccess->Show();
+    $winFilters->lblFilterItemList->Show();
+    $winFilters->tfFilterItemList->Show();
+    $winFilters->btnFilterOk->Enable();
+    
+    # Hide Contains options
+    $winFilters->chFiltersContainsCase->Hide();
+    $winFilters->chFiltersContainsRegex->Hide();
+    $winFilters->chFiltersContainsFileOnly->Hide();
+    $winFilters->lblFiltersContainOk->Hide();
+    $winFilters->lblFiltersContainErr->Hide();
+    $winFilters->lblFiltersContainWarn->Hide();
+    $winFilters->tfFiltersContains->Hide();
+    
+    # Hide File size options
+    $winFilters->cbFiltersSizeOp->Hide();
+    $winFilters->tfFiltersSize->Hide();
+    $winFilters->cbFiltersSizeUnit->Hide();
+    
+    # Hide Last modified options
+    $winFilters->cbFiltersLastModif->Hide();
+    $winFilters->dtFiltersLastModif->Hide();
+    
+  # Last modified
+  } elsif ($type == 3) {
+    $winFilters->cbFiltersLastModif->Show();
+    $winFilters->dtFiltersLastModif->Show();
+    $winFilters->lblFilterItemList->Show();
+    $winFilters->tfFilterItemList->Show();
+    $winFilters->btnFilterOk->Enable();
+    
+    # Hide Contains options
+    $winFilters->chFiltersContainsCase->Hide();
+    $winFilters->chFiltersContainsRegex->Hide();
+    $winFilters->chFiltersContainsFileOnly->Hide();
+    $winFilters->lblFiltersContainOk->Hide();
+    $winFilters->lblFiltersContainErr->Hide();
+    $winFilters->lblFiltersContainWarn->Hide();
+    $winFilters->tfFiltersContains->Hide();
+    
+    # Hide File size options
+    $winFilters->cbFiltersSizeOp->Hide();
+    $winFilters->tfFiltersSize->Hide();
+    $winFilters->cbFiltersSizeUnit->Hide();
+    
+    # Hide Last accessed options
+    $winFilters->cbFiltersLastAccess->Hide();
+    $winFilters->dtFiltersLastAccess->Hide();
+    
+  # Only Folders
   } else {
-    @filesStr = Win32::GUI::GetOpenFileName(  -owner         => $win                 ,
-                                              -title         => $STR{'selFiles'}.':' ,
-                                              -defaultfilter => 0                    ,
-                                              -filemustexist => 1                    ,
-                                              -multisel      => 1                    ,
-                                              -explorer      => 1                    , );
-  }
-
-  # Selected file
-  if (scalar(@filesStr) > 0) {
-    # Single file
-    if (scalar(@filesStr) == 1) { $win->tfInputFiles->Text($filesStr[0]); }
-    # Multiple files
-    else {
-      my $filesStr;
-      foreach my $file (@filesStr) { $filesStr .= "\"$file\" "; }
-      chop($filesStr);
-      $win->tfInputFiles->Text($filesStr);
-    }
+    $winFilters->btnFilterOk->Enable();
+    
+    # Hide Contains options
+    $winFilters->chFiltersContainsCase->Hide();
+    $winFilters->chFiltersContainsRegex->Hide();
+    $winFilters->chFiltersContainsFileOnly->Hide();
+    $winFilters->lblFiltersContainOk->Hide();
+    $winFilters->lblFiltersContainErr->Hide();
+    $winFilters->lblFiltersContainWarn->Hide();
+    $winFilters->tfFiltersContains->Hide();
+    
+    # Hide File size options
+    $winFilters->cbFiltersSizeOp->Hide();
+    $winFilters->tfFiltersSize->Hide();
+    $winFilters->cbFiltersSizeUnit->Hide();
+    $winFilters->lblFilterItemList->Hide();
+    $winFilters->tfFilterItemList->Hide();
+    
+    # Hide Last accessed options
+    $winFilters->cbFiltersLastAccess->Hide();
+    $winFilters->dtFiltersLastAccess->Hide();
+    
+    # Hide Last modified options
+    $winFilters->cbFiltersLastModif->Hide();
+    $winFilters->dtFiltersLastModif->Hide();
   }
   
-  &isProcessReady(0);
+  &isFilterReady(0);
 
-}  #--- End btnInputFiles_Click
-
-#--------------------------#
-sub rbFiltersNone_Click
-#--------------------------#
-{
-  &selectFilter();
-
-}  #--- End rbFiltersNone_Click
-
-#--------------------------#
-sub rbFiltersDirOnly_Click
-#--------------------------#
-{
-  &selectFilter();
-
-}  #--- End rbFiltersDirOnly_Click
-
-#--------------------------#
-sub rbFiltersSize_Click
-#--------------------------#
-{
-  &selectFilter();
-
-}  #--- End rbFiltersSize_Click
-
-#--------------------------#
-sub tfFiltersSize_Change
-#--------------------------#
-{
-  &isProcessReady(0);
-
-}  #--- End tfFiltersSize_Change
-
-#--------------------------#
-sub rbFiltersContains_Click
-#--------------------------#
-{
-  &selectFilter();
-
-}  #--- End rbFiltersContains_Click
-
-#--------------------------#
-sub tfFiltersContains_Change
-#--------------------------#
-{
-  # Test Regex if necessary
-  if ($win->chFiltersContainsRegex->Checked()) {
-    &showContainsRegexStatus;
-  }
-
-  &isProcessReady(0);
-
-}  #--- End tfFiltersContains_Change
+}  #--- End cbFiltersType_Change
 
 #--------------------------#
 sub chFiltersContainsRegex_Click
 #--------------------------#
 {
-  # Test Regex if necessary
-  if ($win->chFiltersContainsRegex->Checked()) {
-    &showContainsRegexStatus;
-  } else {
-    $win->lblFiltersContainOk->Hide();
-    $win->lblFiltersContainErr->Hide();
-    $win->lblFiltersContainWarn->Hide();
-  }
-
-  &isProcessReady(0);
+  &isFilterReady(0);
 
 }  #--- End chFiltersContainsRegex_Click
 
 #--------------------------#
-sub showContainsRegexStatus
+sub tfFiltersContains_Change
+#--------------------------#
+{
+  &isFilterReady(0);
+
+}  #--- End tfFiltersContains_Change
+
+#--------------------------#
+sub cbFiltersSizeOp_Change
 #--------------------------#
 {
   # Local variables
-  my $regex = $win->tfFiltersContains->Text();
-  if ($regex) {
-    my ($statusRegex, $msg) = &validRegex($regex);
-    
-    # Warning
-    if      ($statusRegex == 2) {
-      $win->lblFiltersContainWarn->Show();
-      $win->lblFiltersContainOk->Hide();
-      $win->lblFiltersContainErr->Hide();
-    # Error
-    } elsif ($statusRegex == 1) {
-      $win->lblFiltersContainErr->Show();
-      $win->lblFiltersContainOk->Hide();
-      $win->lblFiltersContainWarn->Hide();
-    # Ok
+  my $op = $winFilters->cbFiltersSizeOp->GetCurSel();
+  
+  if ($op == 1) { # Equal
+    $winFilters->lblFilterItemList->Enable();
+    $winFilters->tfFilterItemList->Enable();
+  } else {
+    $winFilters->lblFilterItemList->Disable();
+    $winFilters->tfFilterItemList->Disable();
+  }
+
+}  #--- End cbFiltersSizeOp_Change
+
+#--------------------------#
+sub tfFiltersSize_Change
+#--------------------------#
+{
+  &isFilterReady(0);
+
+}  #--- End tfFiltersSize_Change
+
+#--------------------------#
+sub tfFilterItemList_Change
+#--------------------------#
+{
+  &isFilterReady(0);
+
+}  #--- End tfFilterItemList_Change
+
+#--------------------------#
+sub cbFiltersLastAccess_Change
+#--------------------------#
+{
+  # Local variables
+  my $op = $winFilters->cbFiltersLastAccess->GetCurSel();
+  
+  if ($op == 1) { # Equal
+    $winFilters->lblFilterItemList->Enable();
+    $winFilters->tfFilterItemList->Enable();
+  } else {
+    $winFilters->lblFilterItemList->Disable();
+    $winFilters->tfFilterItemList->Disable();
+  }
+  
+  &isFilterReady(0);
+
+}  #--- End cbFiltersLastAccess_Change
+
+#--------------------------#
+sub dtFiltersLastAccess_Change
+#--------------------------#
+{
+  &isFilterReady(0);
+
+}  #--- End dtFiltersLastAccess_Change
+
+#--------------------------#
+sub cbFiltersLastModif_Change
+#--------------------------#
+{
+  # Local variables
+  my $op = $winFilters->cbFiltersLastModif->GetCurSel();
+  
+  if ($op == 1) { # Equal
+    $winFilters->lblFilterItemList->Enable();
+    $winFilters->tfFilterItemList->Enable();
+  } else {
+    $winFilters->lblFilterItemList->Disable();
+    $winFilters->tfFilterItemList->Disable();
+  }
+  
+  &isFilterReady(0);
+
+}  #--- End cbFiltersLastModif_Change
+
+#--------------------------#
+sub dtFiltersLastModif_Change
+#--------------------------#
+{
+  &isFilterReady(0);
+
+}  #--- End dtFiltersLastModif_Change
+
+#--------------------------#
+sub isFilterReady
+#--------------------------#
+{
+  # Local variables
+  my $confirm = shift;
+  my $type = $winFilters->cbFiltersType->GetCurSel();
+  my $nextStep;
+  
+  # Contains
+  if      ($type == 0) {
+    my $regexStr = $winFilters->tfFiltersContains->Text();
+    if ($regexStr) {
+      if ($winFilters->chFiltersContainsRegex->Checked()) {
+        my ($statusRegex, $msg);
+        my $nbrLines = $winFilters->tfFiltersContains->GetLineCount();
+        if ($nbrLines == 1) { ($statusRegex, $msg) = &validRegex($regexStr); }
+        else {
+          my $i = 0;
+          while ($i <= $nbrLines) {
+            if (my $line = $winFilters->tfFiltersContains->GetLine($i)) {
+              ($statusRegex, $msg) = &validRegex($line);
+              if ($statusRegex == 1) { last; }
+            }
+            $i++;
+          }
+        }
+        
+        # Warning
+        if      ($statusRegex == 2) {
+          $winFilters->lblFiltersContainWarn->Show();
+          $winFilters->lblFiltersContainOk->Hide();
+          $winFilters->lblFiltersContainErr->Hide();
+        # Error
+        } elsif ($statusRegex == 1) {
+          $winFilters->lblFiltersContainErr->Show();
+          $winFilters->lblFiltersContainOk->Hide();
+          $winFilters->lblFiltersContainWarn->Hide();
+          $nextStep = $STR{'errRegex'};
+        # Ok
+        } else {
+          $winFilters->lblFiltersContainOk->Show();
+          $winFilters->lblFiltersContainErr->Hide();
+          $winFilters->lblFiltersContainWarn->Hide();
+        }
+      }
     } else {
-      $win->lblFiltersContainOk->Show();
-      $win->lblFiltersContainErr->Hide();
-      $win->lblFiltersContainWarn->Hide();
+      $winFilters->lblFiltersContainOk->Hide();
+      $winFilters->lblFiltersContainErr->Hide();
+      $winFilters->lblFiltersContainWarn->Hide();
+      $nextStep = $STR{'setContains'};
+    }
+
+  # File size
+  } elsif ($type == 1) {
+    my $op = $winFilters->cbFiltersSizeOp->GetCurSel();
+    if (($op == 1 and !$winFilters->tfFiltersSize->Text() and !$winFilters->tfFilterItemList->Text()) or
+        ($op != 1 and !$winFilters->tfFiltersSize->Text())) {
+      $nextStep = $STR{'setFileSize'};
+    } elsif ($op == 1 and $winFilters->tfFilterItemList->Text()) { # Equal with a list of size
+      my $nbrLines = $winFilters->tfFilterItemList->GetLineCount();
+      my $i = 0;
+      while ($i <= $nbrLines) {
+        if (my $line = $winFilters->tfFilterItemList->GetLine($i)) {
+          if ($line !~ /^\d+$/) {
+            $nextStep = $STR{'setFileSize'};
+            last;
+          }
+        }
+        $i++;
+      }
+    }
+    
+  # Last accessed
+  } elsif ($type == 2) {
+    my $op = $winFilters->cbFiltersLastAccess->GetCurSel();
+    if ($op == 1 and $winFilters->tfFilterItemList->Text()) { # Equal with a list of date
+      my $nbrLines = $winFilters->tfFilterItemList->GetLineCount();
+      my $i = 0;
+      while ($i <= $nbrLines) {
+        if (my $line = $winFilters->tfFilterItemList->GetLine($i)) {
+          if ($line !~ /^\d{4}\-\d{2}\-\d{2}/) {
+            $nextStep = $STR{'setDate'};
+            last;
+          }
+        }
+        $i++;
+      }
+    }
+    
+  # Last modified
+  } elsif ($type == 3) {
+    my $op = $winFilters->cbFiltersLastModif->GetCurSel();
+    if ($op == 1 and $winFilters->tfFilterItemList->Text()) { # Equal with a list of date
+      my $nbrLines = $winFilters->tfFilterItemList->GetLineCount();
+      my $i = 0;
+      while ($i <= $nbrLines) {
+        if (my $line = $winFilters->tfFilterItemList->GetLine($i)) {
+          if ($line !~ /^\d{4}\-\d{2}\-\d{2}/) {
+            $nextStep = $STR{'setDate'};
+            last;
+          }
+        }
+        $i++;
+      }
+    }
+  }
+  
+  # Return an error message or enable the button
+  if ($nextStep) {
+    $winFilters->btnFilterOk->Disable();
+    $winFilters->btnFilterNotReady->Enable();
+    if ($confirm) {
+      Win32::GUI::MessageBox($winFilters, "$STR{'notReady'} ?\n\n$STR{'nextStep'}: $nextStep", $STR{'notReady'}, 0x40040);
     }
   } else {
-    $win->lblFiltersContainOk->Hide();
-    $win->lblFiltersContainErr->Hide();
-    $win->lblFiltersContainWarn->Hide();
-  }
-
-}  #--- End showContainsRegexStatus
-
-#--------------------------#
-sub rbFiltersLastAccess_Click
-#--------------------------#
-{
-  &selectFilter();
-
-}  #--- End rbFiltersLastAccess_Click
-
-#--------------------------#
-sub rbFiltersLastModif_Click
-#--------------------------#
-{
-  &selectFilter();
-
-}  #--- End rbFiltersLastModif_Click
-
-#--------------------------#
-sub selectFilter
-#--------------------------#
-{
-  # None
-  if      ($win->rbFiltersNone->Checked()) {    # Filter: None
-    # Disable all other options
-    $win->cbFiltersSizeOp->Disable();
-    $win->tfFiltersSize->Text('');
-    $win->tfFiltersSize->Disable();
-    $win->cbFiltersSizeUnit->Disable();
-    $win->tfFiltersContains->Text('');
-    $win->tfFiltersContains->Disable();
-    $win->chFiltersContainsCase->Disable();
-    $win->chFiltersContainsRegex->Disable();
-    $win->chFiltersContainsFileOnly->Disable();
-    $win->cbFiltersLastAccess->Disable();
-    $win->dtFiltersLastAccess->Disable();
-    $win->cbFiltersLastModif->Disable();
-    $win->dtFiltersLastModif->Disable();
-    # Reactivate Functions and options
-    $win->rbListFiles->Checked(1);
-    $win->rbListExt->Checked(0);
-    $win->chListFilesOpt1->Enable();
-    $win->chListFilesOpt2->Enable();
-    $win->chListFilesOpt3->Enable();
-    $win->chListFilesOpt4->Enable();
-    $win->chListFilesOpt5->Enable();
-    $win->chListFilesOpt6->Enable();
-    $win->chListFilesOpt8->Enable();
-    $win->chCopyRemDouble->Enable();
-    $win->rbRenByHash->Checked(1);
-    $win->rbRenSort->Checked(0);
-    $win->rbRenReplace->Checked(0);
-    $win->rbRenByHash->Enable();
-    $win->cbRenByHash->Enable();
-    $win->rbRenSort->Enable();
-    $win->btnRenSort->Disable();
-    $win->rbRenReplace->Enable();
-    $win->tfRenReplace->Disable();
-    $win->lblRenReplaceBy->Disable();
-    $win->chRenReplaceCase->Disable();
-    $win->chRenReplaceRegex->Disable();
-    $win->chRenReplaceFolder->Disable();
-
-  } elsif ($win->rbFiltersDirOnly->Checked()) {   # Filter: Only folders
-    # Disable all other options
-    $win->cbFiltersSizeOp->Disable();
-    $win->tfFiltersSize->Text('');
-    $win->tfFiltersSize->Disable();
-    $win->cbFiltersSizeUnit->Disable();
-    $win->tfFiltersContains->Text('');
-    $win->tfFiltersContains->Disable();
-    $win->chFiltersContainsCase->Disable();
-    $win->chFiltersContainsRegex->Disable();
-    $win->chFiltersContainsFileOnly->Disable();
-    $win->cbFiltersLastAccess->Disable();
-    $win->dtFiltersLastAccess->Disable();
-    $win->cbFiltersLastModif->Disable();
-    $win->dtFiltersLastModif->Disable();
-    # Functions
-    # Lot of options and functions don't apply to folders, disable it
-    # List full path only
-    $win->chListFilesOpt2->Checked(0);
-    $win->chListFilesOpt2->Disable();
-    $win->chListFilesOpt3->Checked(0);
-    $win->chListFilesOpt3->Disable();
-    $win->chListFilesOpt4->Checked(0);
-    $win->chListFilesOpt4->Disable();
-    $win->chListFilesOpt5->Checked(0);
-    $win->chListFilesOpt5->Disable();
-    $win->chListFilesOpt6->Checked(0);
-    $win->chListFilesOpt6->Disable();
-    $win->chListFilesOpt8->Checked(0);
-    $win->chListFilesOpt8->Disable();
-    # Copy or move : Can't remove duplicate
-    $win->chCopyRemDouble->Checked(0);
-    $win->chCopyRemDouble->Disable;
-    # Rename : Disable all
-    $win->rbRenByHash->Checked(0);
-    $win->rbRenByHash->Disable();
-    $win->cbRenByHash->Disable();
-    $win->rbRenSort->Checked(0);
-    $win->rbRenSort->Disable();
-    $win->btnRenSort->Disable();
-    $win->rbRenReplace->Checked(0);
-    $win->rbRenReplace->Disable();
-    $win->tfRenReplace->Disable();
-    $win->lblRenReplaceBy->Disable();
-    $win->tfRenReplaceBy->Disable();
-    $win->chRenReplaceCase->Disable();
-    $win->chRenReplaceRegex->Disable();
-    $win->chRenReplaceByEval->Disable();
-    $win->chRenReplaceFolder->Disable();
-    $win->lblRenReplaceOk->Hide();
-    $win->lblRenReplaceErr->Hide();
-    $win->lblRenReplaceWarn->Hide();
-    $win->lblRenReplaceByOk->Hide();
-    $win->lblRenReplaceByErr->Hide();
-    $win->lblRenReplaceByWarn->Hide();
-    
-  } elsif ($win->rbFiltersSize->Checked()) {    # Filter: File size
-    # Enable options
-    $win->cbFiltersSizeOp->Enable();
-    $win->tfFiltersSize->Enable();
-    $win->cbFiltersSizeUnit->Enable();
-    # Disable all other options
-    $win->tfFiltersContains->Text('');
-    $win->tfFiltersContains->Disable();
-    $win->chFiltersContainsCase->Disable();
-    $win->chFiltersContainsRegex->Disable();
-    $win->chFiltersContainsFileOnly->Disable();
-    $win->cbFiltersLastAccess->Disable();
-    $win->dtFiltersLastAccess->Disable();
-    $win->cbFiltersLastModif->Disable();
-    $win->dtFiltersLastModif->Disable();
-    # Reactivate Functions and options
-    $win->rbListFiles->Checked(1);
-    $win->rbListExt->Checked(0);
-    $win->chListFilesOpt1->Enable();
-    $win->chListFilesOpt2->Enable();
-    $win->chListFilesOpt3->Enable();
-    $win->chListFilesOpt4->Enable();
-    $win->chListFilesOpt5->Enable();
-    $win->chListFilesOpt6->Enable();
-    $win->chListFilesOpt8->Enable();
-    $win->chCopyRemDouble->Enable();
-    $win->rbRenByHash->Checked(1);
-    $win->rbRenSort->Checked(0);
-    $win->rbRenReplace->Checked(0);
-    $win->rbRenByHash->Enable();
-    $win->cbRenByHash->Enable();
-    $win->rbRenSort->Enable();
-    $win->btnRenSort->Disable();
-    $win->rbRenReplace->Enable();
-    $win->tfRenReplace->Disable();
-    $win->lblRenReplaceBy->Disable();
-    $win->chRenReplaceCase->Disable();
-    $win->chRenReplaceRegex->Disable();
-    $win->chRenReplaceFolder->Disable();
-    
-  } elsif ($win->rbFiltersContains->Checked()) {    # Filter: Contains
-    # Enable options
-    $win->tfFiltersContains->Enable();
-    $win->chFiltersContainsCase->Enable();
-    $win->chFiltersContainsRegex->Enable();
-    $win->chFiltersContainsFileOnly->Enable();
-    # Disable all other options
-    $win->cbFiltersSizeOp->Disable();
-    $win->tfFiltersSize->Text('');
-    $win->tfFiltersSize->Disable();
-    $win->cbFiltersSizeUnit->Disable();
-    $win->cbFiltersLastAccess->Disable();
-    $win->dtFiltersLastAccess->Disable();
-    $win->cbFiltersLastModif->Disable();
-    $win->dtFiltersLastModif->Disable();
-    # Reactivate Functions and options
-    $win->rbListFiles->Checked(1);
-    $win->rbListExt->Checked(0);
-    $win->chListFilesOpt1->Enable();
-    $win->chListFilesOpt2->Enable();
-    $win->chListFilesOpt3->Enable();
-    $win->chListFilesOpt4->Enable();
-    $win->chListFilesOpt5->Enable();
-    $win->chListFilesOpt6->Enable();
-    $win->chListFilesOpt8->Enable();
-    $win->chCopyRemDouble->Enable();
-    $win->rbRenByHash->Checked(1);
-    $win->rbRenSort->Checked(0);
-    $win->rbRenReplace->Checked(0);
-    $win->rbRenByHash->Enable();
-    $win->cbRenByHash->Enable();
-    $win->rbRenSort->Enable();
-    $win->btnRenSort->Disable();
-    $win->rbRenReplace->Enable();
-    $win->tfRenReplace->Disable();
-    $win->lblRenReplaceBy->Disable();
-    $win->chRenReplaceCase->Disable();
-    $win->chRenReplaceRegex->Disable();
-    $win->chRenReplaceFolder->Disable();
-    
-  } elsif ($win->rbFiltersLastAccess->Checked()) {    # Filter: Last accessed
-    # Enable options
-    $win->cbFiltersLastAccess->Enable();
-    $win->dtFiltersLastAccess->Enable();
-    # Disable all other options
-    $win->cbFiltersSizeOp->Disable();
-    $win->tfFiltersSize->Text('');
-    $win->tfFiltersSize->Disable();
-    $win->cbFiltersSizeUnit->Disable();
-    $win->tfFiltersContains->Text('');
-    $win->tfFiltersContains->Disable();
-    $win->chFiltersContainsCase->Disable();
-    $win->chFiltersContainsRegex->Disable();
-    $win->chFiltersContainsFileOnly->Disable();
-    $win->cbFiltersLastModif->Disable();
-    $win->dtFiltersLastModif->Disable();
-    # Reactivate Functions and options
-    $win->rbListFiles->Checked(1);
-    $win->rbListExt->Checked(0);
-    $win->chListFilesOpt1->Enable();
-    $win->chListFilesOpt2->Enable();
-    $win->chListFilesOpt3->Enable();
-    $win->chListFilesOpt4->Enable();
-    $win->chListFilesOpt5->Enable();
-    $win->chListFilesOpt6->Enable();
-    $win->chListFilesOpt8->Enable();
-    $win->chCopyRemDouble->Enable();
-    $win->rbRenByHash->Checked(1);
-    $win->rbRenSort->Checked(0);
-    $win->rbRenReplace->Checked(0);
-    $win->rbRenByHash->Enable();
-    $win->cbRenByHash->Enable();
-    $win->rbRenSort->Enable();
-    $win->btnRenSort->Disable();
-    $win->rbRenReplace->Enable();
-    $win->tfRenReplace->Disable();
-    $win->lblRenReplaceBy->Disable();
-    $win->chRenReplaceCase->Disable();
-    $win->chRenReplaceRegex->Disable();
-    $win->chRenReplaceFolder->Disable();
-    
-  } elsif ($win->rbFiltersLastModif->Checked()) {   # Filter: Last modified
-    # Enable options
-    $win->cbFiltersLastModif->Enable();
-    $win->dtFiltersLastModif->Enable();
-    # Disable all other options
-    $win->cbFiltersSizeOp->Disable();
-    $win->tfFiltersSize->Text('');
-    $win->tfFiltersSize->Disable();
-    $win->cbFiltersSizeUnit->Disable();
-    $win->tfFiltersContains->Text('');
-    $win->tfFiltersContains->Disable();
-    $win->chFiltersContainsCase->Disable();
-    $win->chFiltersContainsRegex->Disable();
-    $win->chFiltersContainsFileOnly->Disable();
-    $win->cbFiltersLastAccess->Disable();
-    $win->dtFiltersLastAccess->Disable();
-    # Reactivate Functions and options
-    $win->rbListFiles->Checked(1);
-    $win->rbListExt->Checked(0);
-    $win->chListFilesOpt1->Enable();
-    $win->chListFilesOpt2->Enable();
-    $win->chListFilesOpt3->Enable();
-    $win->chListFilesOpt4->Enable();
-    $win->chListFilesOpt5->Enable();
-    $win->chListFilesOpt6->Enable();
-    $win->chListFilesOpt8->Enable();
-    $win->chCopyRemDouble->Enable();
-    $win->rbRenByHash->Checked(1);
-    $win->rbRenSort->Checked(0);
-    $win->rbRenReplace->Checked(0);
-    $win->rbRenByHash->Enable();
-    $win->cbRenByHash->Enable();
-    $win->rbRenSort->Enable();
-    $win->btnRenSort->Disable();
-    $win->rbRenReplace->Enable();
-    $win->tfRenReplace->Disable();
-    $win->lblRenReplaceBy->Disable();
-    $win->chRenReplaceCase->Disable();
-    $win->chRenReplaceRegex->Disable();
-    $win->chRenReplaceFolder->Disable();
+    $winFilters->btnFilterOk->Enable();
+    $winFilters->btnFilterNotReady->Disable();
   }
   
-  &isProcessReady(0);
+}  #--- End isFilterReady
+
+#--------------------------#
+sub btnFilterNotReady_Click
+#--------------------------#
+{
+  &isFilterReady(1);
+
+}  #--- End btnFilterNotReady_Click
+
+
+#--------------------------#
+sub btnFilterCancel_Click
+#--------------------------#
+{
+  &winFilters_Terminate();
+
+}  #--- End btnFilterCancel_Click
+
+#--------------------------#
+sub winFilters_Terminate
+#--------------------------#
+{
+  $winFilters->Hide();
+  $win->Enable();
+  $win->SetForegroundWindow();
+  return(0);
+
+}  #--- End winFilters_Terminate
+
+#--------------------------#
+sub btnFilterOk_Click
+#--------------------------#
+{
+  # Close Filter window
+  &winFilters_Terminate();
   
-}  #--- End selectFilter
+  # Fill the grid
+  if ($winFilters->cbFiltersOp->IsEnabled()) {
+    &feedFilterGrid($winFilters->cbFiltersOp->GetString($winFilters->cbFiltersOp->GetCurSel()));
+  } else { 
+    $win->gridFilter->DeleteNonFixedRows(); # Reset grid
+    &feedFilterGrid(0);
+  }
+  
+  # Enable buttons
+  $win->btnFilterAdd->Enable();
+  $win->btnFilterDel->Enable();
+
+}  #--- End btnFilterOk_Click
+
+#--------------------------#
+sub feedFilterGrid
+#--------------------------#
+{
+  # Operator
+  my $operator = shift;
+  
+  # Type
+  my $type = $winFilters->cbFiltersType->GetCurSel();
+  my $typeOp;
+  my $flags;
+  my @searchStrings;
+  if      ($type == 0) {
+    # Search strings
+    my $nbrItems = 0;
+    for (my $i = 0; $i <= $winFilters->tfFiltersContains->GetLineCount(); $i++) {
+      if ($winFilters->tfFiltersContains->GetLine($i)) {
+        push(@searchStrings, $winFilters->tfFiltersContains->GetLine($i));
+        $nbrItems++;
+      }
+    }
+    if ($nbrItems > 1) { $operator = $STR{'OR'}; }    
+    
+    # Flags
+    if ($winFilters->chFiltersContainsCase->Checked())      { $flags  = '1-'; }
+    else                                                    { $flags  = '0-'; }
+    if ($winFilters->chFiltersContainsRegex->Checked())     { $flags .= '1-'; }
+    else                                                    { $flags .= '0-'; }
+    if ($winFilters->chFiltersContainsFileOnly->Checked())  { $flags .= '1';  }
+    else                                                    { $flags .= '0';  }
+
+  # File size
+  } elsif ($type == 1) {
+    $typeOp      = $winFilters->cbFiltersSizeOp->GetString($winFilters->cbFiltersSizeOp->GetCurSel());
+    my $sizeUnit = $winFilters->cbFiltersSizeUnit->GetString($winFilters->cbFiltersSizeUnit->GetCurSel());
+    if ($winFilters->tfFiltersSize->Text()) {
+      push(@searchStrings, $winFilters->tfFiltersSize->Text()." $sizeUnit");
+    }
+    if ($winFilters->tfFilterItemList->Text()) {
+      # Search strings
+      my $nbrItems = 0;
+      for (my $i = 0; $i <= $winFilters->tfFilterItemList->GetLineCount(); $i++) {
+        if ($winFilters->tfFilterItemList->GetLine($i)) {
+          push(@searchStrings, $winFilters->tfFilterItemList->GetLine($i)." $sizeUnit");
+          $nbrItems++;
+        }
+      }
+      if ($nbrItems > 1) { $operator = $STR{'OR'}; }    
+    }
+    
+  # Last accessed
+  } elsif ($type == 2) {
+    $typeOp = $winFilters->cbFiltersLastAccess->GetString($winFilters->cbFiltersLastAccess->GetCurSel());
+    if ($winFilters->dtFiltersLastAccess->GetDate()) {
+      my ($d, $m, $y) = $winFilters->dtFiltersLastAccess->GetDate();
+      my $dateStr = sprintf("%04d\-%02d\-%02d", $y, $m, $d);
+      push(@searchStrings, $dateStr);
+    }
+    if ($winFilters->tfFilterItemList->Text()) {
+      # Search strings
+      my $nbrItems = 0;
+      for (my $i = 0; $i <= $winFilters->tfFilterItemList->GetLineCount(); $i++) {
+        if ($winFilters->tfFilterItemList->GetLine($i)) {
+          push(@searchStrings, $winFilters->tfFilterItemList->GetLine($i));
+          $nbrItems++;
+        }
+      }
+      if ($nbrItems > 1) { $operator = $STR{'OR'}; }    
+    }
+    
+  # Last modified
+  } elsif ($type == 3) {
+    $typeOp = $winFilters->cbFiltersLastModif->GetString($winFilters->cbFiltersLastModif->GetCurSel());
+    if ($winFilters->dtFiltersLastModif->GetDate()) {
+      my ($d, $m, $y) = $winFilters->dtFiltersLastModif->GetDate();
+      my $dateStr = sprintf("%04d\-%02d\-%02d", $y, $m, $d);
+      push(@searchStrings, $dateStr);
+    }
+    if ($winFilters->tfFilterItemList->Text()) {
+      # Search strings
+      my $nbrItems = 0;
+      for (my $i = 0; $i <= $winFilters->tfFilterItemList->GetLineCount(); $i++) {
+        if ($winFilters->tfFilterItemList->GetLine($i)) {
+          push(@searchStrings, $winFilters->tfFilterItemList->GetLine($i));
+          $nbrItems++;
+        }
+      }
+      if ($nbrItems > 1) { $operator = $STR{'OR'}; }    
+    }
+  }
+  
+  # Feed the grid
+  my $typeStr = $winFilters->cbFiltersType->GetString($type);
+  if (@searchStrings) {
+    foreach my $string (@searchStrings) {
+      if ($string and my $i = $win->gridFilter->InsertRow('-', -1)) {
+        if ($operator and $i > 1) {
+          $win->gridFilter->SetCellText($i, 0, $operator);
+          $win->gridFilter->SetCellEditable($i, 0, 1);
+          $win->gridFilter->SetCellType($i, 0, 6);
+          $win->gridFilter->SetCellOptions($i, 0, [$STR{'OR'}, $STR{'AND'}]);
+        }
+        $win->gridFilter->SetCellText($i, 1, $typeStr);
+        if ($typeOp) { $win->gridFilter->SetCellText($i, 2, $typeOp); }
+        if ($flags)  { $win->gridFilter->SetCellText($i, 3, $flags);  }
+        $win->gridFilter->SetCellText($i, 4, $string);
+        $win->gridFilter->SetCellEditable($i, 1, 0);
+        $win->gridFilter->SetCellEditable($i, 2, 0);
+        $win->gridFilter->SetCellEditable($i, 3, 0);
+        $win->gridFilter->SetCellEditable($i, 4, 0);
+      }
+    }
+  } else { # Only Folder
+    if (my $i = $win->gridFilter->InsertRow('-', -1)) {
+      if ($operator and $i > 1) {
+        $win->gridFilter->SetCellText($i, 0, $operator);
+        $win->gridFilter->SetCellEditable($i, 0, 1);
+        $win->gridFilter->SetCellType($i, 0, 6);
+        $win->gridFilter->SetCellOptions($i, 0, [$STR{'OR'}, $STR{'AND'}]);
+      }
+      $win->gridFilter->SetCellText($i, 1, $typeStr);
+      $win->gridFilter->SetCellEditable($i, 1, 0);
+      $win->gridFilter->SetCellEditable($i, 2, 0);
+      $win->gridFilter->SetCellEditable($i, 3, 0);
+      $win->gridFilter->SetCellEditable($i, 4, 0);
+    }
+    &OnlyFoldersOn();
+  }
+    
+  $win->gridFilter->AutoSizeColumns();
+  $win->gridFilter->ExpandLastColumn();
+  $win->gridFilter->Refresh();
+  $win->gridFilter->SetListMode();
+
+}  #--- End feedFilterGrid
+  
+#--------------------------#
+sub btnFilterDel_Click
+#--------------------------#
+{
+  # Local variables
+  my (@coord) = $win->gridFilter->GetSelectedCellRange();
+  
+  my $firstSelectedRow;
+  my $lastSelectedRow;
+  if    ($coord[2]) { $firstSelectedRow = $coord[0]; $lastSelectedRow = $coord[2]; }
+  elsif ($coord[0]) { $firstSelectedRow = $coord[0]; $lastSelectedRow = $coord[0]; }
+  else {
+    $firstSelectedRow = $win->gridFilter->GetRows()-1;
+    $lastSelectedRow  = $win->gridFilter->GetRows()-1;
+  }
+  for (my $row = $lastSelectedRow; $row >= $firstSelectedRow; $row--) { $win->gridFilter->DeleteRow($row); }
+  
+  # Reset first line operator
+  if ($win->gridFilter->GetCellText(1, 0) ne '-') { $win->gridFilter->SetCellText(1, 0, '-'); }
+  
+  # Reset options ?
+  if (!&isOnlyFoldersOn()) { &OnlyFoldersOff(); }
+  
+  # Disable buttons ?
+  if ($win->gridFilter->GetRows() == 1) {
+    $win->btnFilterAdd->Disable();
+    $win->btnFilterDel->Disable();
+  }
+  
+  $win->gridFilter->AutoSizeColumns();
+  $win->gridFilter->ExpandLastColumn();
+  $win->gridFilter->Refresh();
+
+}  #--- End btnFilterDel_Click
+
+#--------------------------#
+sub isOnlyFoldersOn
+#--------------------------#
+{
+  for (my $row = 0; $row <= $win->gridFilter->GetRows(); $row++) {
+    if ($win->gridFilter->GetCellText(1, 1) eq $STR{'rbFiltersDirOnly'}) { return(1); }
+  }
+  
+  return(0);
+  
+}  #--- End isOnlyFoldersOn
+  
+#--------------------------#
+sub OnlyFoldersOn
+#--------------------------#
+{
+  # Lot of options and functions don't apply to folders, disable it
+  # List full path only
+  $win->chListFilesOptFN->Checked(0);
+  $win->chListFilesOptFN->Disable();
+  $win->chListFilesOptHV->Checked(0);
+  $win->chListFilesOptHV->Disable();
+  $win->chListFilesOptFD->Checked(0);
+  $win->chListFilesOptFD->Disable();
+  $win->chListFilesOptNbrL->Checked(0);
+  $win->chListFilesOptNbrL->Disable();
+  $win->chListFilesOptNF->Checked(0);
+  $win->chListFilesOptNF->Disable();
+  $win->rbListExt->Disable();
+  # Copy or move : Can't remove duplicate
+  $win->chCopyRemDouble->Checked(0);
+  $win->chCopyRemDouble->Disable;
+  # Rename : Disable all
+  $win->rbRenByHash->Checked(0);
+  $win->rbRenByHash->Disable();
+  $win->cbRenByHash->Disable();
+  $win->rbRenSort->Checked(0);
+  $win->rbRenSort->Disable();
+  $win->btnRenSort->Disable();
+  $win->rbRenReplace->Checked(0);
+  $win->rbRenReplace->Disable();
+  $win->tfRenReplace->Disable();
+  $win->lblRenReplaceBy->Disable();
+  $win->tfRenReplaceBy->Disable();
+  $win->chRenReplaceCase->Disable();
+  $win->chRenReplaceRegex->Disable();
+  $win->chRenReplaceByEval->Disable();
+  $win->chRenReplaceFolder->Disable();
+  $win->lblRenReplaceOk->Hide();
+  $win->lblRenReplaceErr->Hide();
+  $win->lblRenReplaceWarn->Hide();
+  $win->lblRenReplaceByOk->Hide();
+  $win->lblRenReplaceByErr->Hide();
+  $win->lblRenReplaceByWarn->Hide();
+
+}  #--- End OnlyFoldersOn
+
+#--------------------------#
+sub OnlyFoldersOff
+#--------------------------#
+{
+  # Reactivate Functions and options
+  $win->rbListFiles->Checked(1);
+  $win->rbListExt->Checked(0);
+  $win->chListFilesOptFP->Enable();
+  $win->chListFilesOptFN->Enable();
+  $win->chListFilesOptHV->Enable();
+  $win->chListFilesOptFD->Enable();
+  $win->chListFilesOptNbrL->Enable();
+  $win->chListFilesOptNF->Enable();
+  $win->rbListExt->Enable();
+  $win->chCopyRemDouble->Enable();
+  $win->rbRenByHash->Checked(1);
+  $win->rbRenSort->Checked(0);
+  $win->rbRenReplace->Checked(0);
+  $win->rbRenByHash->Enable();
+  $win->cbRenByHash->Enable();
+  $win->rbRenSort->Enable();
+  $win->btnRenSort->Disable();
+  $win->rbRenReplace->Enable();
+  $win->tfRenReplace->Disable();
+  $win->lblRenReplaceBy->Disable();
+  $win->chRenReplaceCase->Disable();
+  $win->chRenReplaceRegex->Disable();
+  $win->chRenReplaceFolder->Disable();
+
+}  #--- End OnlyFoldersOff
 
 #--------------------------#
 sub TabFunctions_Click
@@ -1853,18 +2408,19 @@ sub TabFunctions_Click
     $win->rbListFiles->Checked(1);
     $win->rbListExt->Checked(0);
     $win->rbListFiles->Show();
-    $win->chListFilesOpt1->Show();
-    $win->chListFilesOpt2->Show();
-    $win->chListFilesOpt3->Show();
-    $win->chListFilesOpt4->Show();
-    $win->chListFilesOpt5->Show();
-    $win->chListFilesOpt6->Show();
-    $win->chListFilesOpt7->Show();
-    $win->chListFilesOpt8->Show();
+    $win->chListFilesOptFP->Show();
+    $win->chListFilesOptFN->Show();
+    $win->chListFilesOptHV->Show();
+    $win->chListFilesOptFD->Show();
+    $win->chListFilesOptNbrL->Show();
+    $win->chListFilesOptNH->Show();
+    $win->chListFilesOptNF->Show();
     $win->rbListExt->Show();
     $win->lblReportDir->Show();
     $win->tfReportDir->Show();
+    $win->cbReportFormat->Show();
     $win->btnReportDir->Show();
+    $win->btnOpenReportDir->Show();
     $win->chOpenReport->Show();
     # Hide Copy or move Function tab
     $win->rbCopy->Checked(1);
@@ -1924,18 +2480,19 @@ sub TabFunctions_Click
     $win->chOpenDstDir->Show();
     # Hide List Function tab
     $win->rbListFiles->Hide();
-    $win->chListFilesOpt1->Hide();
-    $win->chListFilesOpt2->Hide();
-    $win->chListFilesOpt3->Hide();
-    $win->chListFilesOpt4->Hide();
-    $win->chListFilesOpt5->Hide();
-    $win->chListFilesOpt6->Hide();
-    $win->chListFilesOpt7->Hide();
-    $win->chListFilesOpt8->Hide();
+    $win->chListFilesOptFP->Hide();
+    $win->chListFilesOptFN->Hide();
+    $win->chListFilesOptHV->Hide();
+    $win->chListFilesOptFD->Hide();
+    $win->chListFilesOptNbrL->Hide();
+    $win->chListFilesOptNH->Hide();
+    $win->chListFilesOptNF->Hide();
     $win->rbListExt->Hide();
     $win->lblReportDir->Hide();
     $win->tfReportDir->Hide();
+    $win->cbReportFormat->Hide();
     $win->btnReportDir->Hide();
+    $win->btnOpenReportDir->Hide();
     $win->chOpenReport->Hide();
     # Hide Rename Function tab
     $win->rbRenByHash->Checked(1);
@@ -1985,18 +2542,19 @@ sub TabFunctions_Click
     $win->btnRenSort->Show();
     # Hide List Function tab
     $win->rbListFiles->Hide();
-    $win->chListFilesOpt1->Hide();
-    $win->chListFilesOpt2->Hide();
-    $win->chListFilesOpt3->Hide();
-    $win->chListFilesOpt4->Hide();
-    $win->chListFilesOpt5->Hide();
-    $win->chListFilesOpt6->Hide();
-    $win->chListFilesOpt7->Hide();
-    $win->chListFilesOpt8->Hide();
+    $win->chListFilesOptFP->Hide();
+    $win->chListFilesOptFN->Hide();
+    $win->chListFilesOptHV->Hide();
+    $win->chListFilesOptFD->Hide();
+    $win->chListFilesOptNbrL->Hide();
+    $win->chListFilesOptNH->Hide();
+    $win->chListFilesOptNF->Hide();
     $win->rbListExt->Hide();
     $win->lblReportDir->Hide();
     $win->tfReportDir->Hide();
+    $win->cbReportFormat->Hide();
     $win->btnReportDir->Hide();
+    $win->btnOpenReportDir->Hide();
     $win->chOpenReport->Hide();
     # Hide Copy or move Function tab
     $win->rbCopy->Hide();
@@ -2017,84 +2575,196 @@ sub TabFunctions_Click
 sub rbListFiles_Click
 #--------------------------#
 {
-  if ($win->rbFiltersDirOnly->Checked()) {   # Filter: Only folders
-    $win->chListFilesOpt1->Enable();
-    $win->chListFilesOpt7->Enable();
+  if (&isOnlyFoldersOn()) {   # Filter: Only folders
+    $win->chListFilesOptFP->Enable();
+    $win->chListFilesOptNH->Enable();
   } else {
-    $win->chListFilesOpt1->Enable();
-    $win->chListFilesOpt2->Enable();
-    $win->chListFilesOpt3->Enable();
-    $win->chListFilesOpt4->Enable();
-    $win->chListFilesOpt5->Enable();
-    $win->chListFilesOpt6->Enable();
-    $win->chListFilesOpt7->Enable();
-    $win->chListFilesOpt8->Enable();
+    $win->chListFilesOptFP->Enable();
+    $win->chListFilesOptFN->Enable();
+    $win->chListFilesOptHV->Enable();
+    $win->chListFilesOptFD->Enable();
+    $win->chListFilesOptNbrL->Enable();
+    $win->chListFilesOptNH->Enable();
+    $win->chListFilesOptNF->Enable();
   }
+  $win->cbReportFormat->Enable();
   
   &isProcessReady(0);
 
 }  #--- End crbListFiles_Click
 
 #--------------------------#
-sub chListFilesOpt1_Click
+sub chListFilesOptFP_Click
 #--------------------------#
 {
   &isProcessReady(0);
 
-}  #--- End chListFilesOpt1_Click
+}  #--- End chListFilesOptFP_Click
 
 #--------------------------#
-sub chListFilesOpt2_Click
-#--------------------------#
-{
-  &isProcessReady(0);
-
-}  #--- End chListFilesOpt2_Click
-
-#--------------------------#
-sub chListFilesOpt3_Click
+sub chListFilesOptFN_Click
 #--------------------------#
 {
   &isProcessReady(0);
 
-}  #--- End chListFilesOpt3_Click
+}  #--- End chListFilesOptFN_Click
 
 #--------------------------#
-sub chListFilesOpt4_Click
+sub chListFilesOptHV_Click
+#--------------------------#
+{
+  if ($win->chListFilesOptHV->Checked()) {
+    $winHashVal->chListFilesHV1->Checked(1);
+    $winHashVal->chListFilesHV2->Checked(1);
+    $winHashVal->chListFilesHV3->Checked(1);
+    $winHashVal->chListFilesHV4->Checked(1);
+    $winHashVal->Center($win);
+    $winHashVal->Show();
+    $win->Disable();
+    return(1);
+  } else {
+    $winHashVal->chListFilesHV1->Checked(0);
+    $winHashVal->chListFilesHV2->Checked(0);
+    $winHashVal->chListFilesHV3->Checked(0);
+    $winHashVal->chListFilesHV4->Checked(0);
+  }
+
+}  #--- End chListFilesOptHV_Click
+
+#--------------------------#
+sub btnHashValuesOk_Click
+#--------------------------#
+{
+  &winHashVal_Terminate();
+
+}  #--- End btnHashValuesOk_Click
+
+#--------------------------#
+sub winHashVal_Terminate
+#--------------------------#
+{
+  $winHashVal->Hide();
+  $win->Enable();
+  $win->SetForegroundWindow();
+  return(0);
+
+}  #--- End winHashVal_Terminate
+
+#--------------------------#
+sub chListFilesHV1_Click
 #--------------------------#
 {
   &isProcessReady(0);
 
-}  #--- End chListFilesOpt4_Click
+}  #--- End chListFilesHV1_Click
 
 #--------------------------#
-sub chListFilesOpt5_Click
-#--------------------------#
-{
-  &isProcessReady(0);
-
-}  #--- End chListFilesOpt5_Click
-
-#--------------------------#
-sub chListFilesOpt6_Click
+sub chListFilesHV2_Click
 #--------------------------#
 {
   &isProcessReady(0);
 
-}  #--- End chListFilesOpt6_Click
+}  #--- End chListFilesHV2_Click
+
+#--------------------------#
+sub chListFilesHV3_Click
+#--------------------------#
+{
+  &isProcessReady(0);
+
+}  #--- End chListFilesHV3_Click
+
+#--------------------------#
+sub chListFilesHV4_Click
+#--------------------------#
+{
+  &isProcessReady(0);
+
+}  #--- End chListFilesHV4_Click
+
+#--------------------------#
+sub chListFilesOptFD_Click
+#--------------------------#
+{
+  if ($win->chListFilesOptFD->Checked()) {
+    $winFileDetails->chListFilesFD1->Checked(1);
+    $winFileDetails->chListFilesFD2->Checked(1);
+    $winFileDetails->chListFilesFD3->Checked(1);
+    $winFileDetails->Center($win);
+    $winFileDetails->Show();
+    $win->Disable();
+    return(1);
+  } else {
+    $winFileDetails->chListFilesFD1->Checked(0);
+    $winFileDetails->chListFilesFD2->Checked(0);
+    $winFileDetails->chListFilesFD3->Checked(0);
+  }
+
+}  #--- End chListFilesOptFD_Click
+
+#--------------------------#
+sub btnFileDetailsOk_Click
+#--------------------------#
+{
+  &winFileDetails_Terminate();
+
+}  #--- End btnFileDetailsOk_Click
+
+#--------------------------#
+sub winFileDetails_Terminate
+#--------------------------#
+{
+  $winFileDetails->Hide();
+  $win->Enable();
+  $win->SetForegroundWindow();
+  return(0);
+
+}  #--- End winFileDetails_Terminate
+
+#--------------------------#
+sub chListFilesFD1_Click
+#--------------------------#
+{
+  &isProcessReady(0);
+
+}  #--- End chListFilesFD1_Click
+
+#--------------------------#
+sub chListFilesFD2_Click
+#--------------------------#
+{
+  &isProcessReady(0);
+
+}  #--- End chListFilesFD2_Click
+
+#--------------------------#
+sub chListFilesFD3_Click
+#--------------------------#
+{
+  &isProcessReady(0);
+
+}  #--- End chListFilesFD3_Click
+
+#--------------------------#
+sub chListFilesOptNbrL_Click
+#--------------------------#
+{
+  &isProcessReady(0);
+
+}  #--- End chListFilesOptNbrL_Click
 
 #--------------------------#
 sub rbListExt_Click
 #--------------------------#
 {
-  $win->chListFilesOpt1->Disable();
-  $win->chListFilesOpt2->Disable();
-  $win->chListFilesOpt3->Disable();
-  $win->chListFilesOpt4->Disable();
-  $win->chListFilesOpt5->Disable();
-  $win->chListFilesOpt6->Disable();
-  $win->chListFilesOpt7->Disable();
-  $win->chListFilesOpt8->Disable();
+  $win->chListFilesOptFP->Disable();
+  $win->chListFilesOptFN->Disable();
+  $win->chListFilesOptHV->Disable();
+  $win->chListFilesOptFD->Disable();
+  $win->chListFilesOptNbrL->Disable();
+  $win->chListFilesOptNH->Disable();
+  $win->chListFilesOptNF->Disable();
+  $win->cbReportFormat->Disable();
   
   &isProcessReady(0);
 
@@ -2123,6 +2793,19 @@ sub tfReportDir_Change
   &isProcessReady(0);
 
 }  #--- End tfReportDir_Change
+
+#--------------------------#
+sub cbReportFormat_Change
+#--------------------------#
+{
+  # Local variables
+  my $format = $win->cbReportFormat->GetCurSel();
+  
+  # Remember
+  $CONFIG{'FORMAT_REPORT'} = $format;
+  &saveConfig(\%CONFIG);
+
+}  #--- End cbReportFormat_Change
 
 #--------------------------#
 sub btnReportDir_Click
@@ -2159,7 +2842,7 @@ sub btnReportDir_Click
 }  #--- End btnReportDir_Click
 
 #--------------------------#
-sub btnOpenDir_Click
+sub btnOpenReportDir_Click
 #--------------------------#
 {
   # Local variables
@@ -2175,7 +2858,7 @@ sub btnOpenDir_Click
                            ".");
   }
 
-}  #--- End btnOpenDir_Click
+}  #--- End btnOpenReportDir_Click
 
 #--------------------------#
 sub chOpenReport_Click
@@ -2800,18 +3483,18 @@ sub btnPreview_Click
       # Local variables
       my %listFiles;
       
-      # List of file paths
-      &getListFiles(\%listFiles, 0);
-      
       # Reset trees
       $winPreview->tvBefore->DeleteAllItems();
       $winPreview->tvAfter->DeleteAllItems();
       
+      # List of file paths
+      &getListFiles(\%listFiles, 0);
+      
       # Fill the Before tree
       my $baseDir;
-      if ($win->tfInputDir->Text()) { $baseDir = $win->tfInputDir->Text(); }
+      if (-d $win->tfInput->Text()) { $baseDir = $win->tfInput->Text(); }
       else {
-        my $filesStr = $win->tfInputFiles->Text();
+        my $filesStr = $win->tfInput->Text();
         # Set base dir
         if ($filesStr) {
           # Multiple files
@@ -3099,11 +3782,11 @@ sub getListFiles
   # Local variables
   my $refListFiles = shift;
   my $execute      = shift;
-  my $dir          = $win->tfInputDir->Text();
-  my $filesStr     = $win->tfInputFiles->Text();
+  my $dir          = $win->tfInput->Text();
   
   # List of files (No filter)
-  if ($filesStr) {
+  if (!-d $dir) {
+    my $filesStr = $dir;
     # Multiple files
     if ($filesStr =~ /" "/) {
       my @items = split(/" "/, $filesStr);
@@ -3130,37 +3813,10 @@ sub getListFiles
     my $nbrSubFolders = 1; # The base dir count as one
     my $count         = 0;
     
-    # Filter: Only folders
-    if    ($win->rbFiltersDirOnly->Checked()) { $filter = 1; }
-    # Filter: File size
-    elsif ($win->rbFiltersSize->Checked()) {
-      $selSize = $win->tfFiltersSize->Text();
-      if ($selSize) {
-        $filter = 2;
-        $sizeOp = $win->cbFiltersSizeOp->Text();
-      }
-    }
-    # Filter: Contains
-    elsif ($win->rbFiltersContains->Checked()) {
-      $regex  = $win->tfFiltersContains->Text();
-      $filter = 3;
-      # Regex option is checked
-      if (!$win->chFiltersContainsRegex->Checked()) { $regex = quotemeta($regex); }
-    }
-    # Filter: Last accessed date
-    elsif ($win->rbFiltersLastAccess->Checked()) {
-      my ($d, $m, $y) = $win->dtFiltersLastAccess->GetDate();
-      $selDateUT      = timelocal(0,0,0,$d,$m-1,$y); # Store in Unixtime format
-      $dateOp         = $win->cbFiltersLastAccess->Text();
-      $filter         = 4;
-    }
-    # Filter: Last modified date
-    elsif ($win->rbFiltersLastModif->Checked() == 1) {
-      my ($d, $m, $y) = $win->dtFiltersLastModif->GetDate();
-      $selDateUT      = timelocal(0,0,0,$d,$m-1,$y); # Store in Unixtime format
-      $dateOp         = $win->cbFiltersLastModif->Text();
-      $filter         = 5;
-    }
+    # Set Filters
+    my $refFilters  = &setFilters();
+    my $nbrFilters  = keys %{$refFilters};
+    my $onlyFolders = &isOnlyFoldersOn();
   
     # Open base directory
     if ($execute) { $win->lblPbCurr->Text($STR{'ListingFile'}.': '.$dir);   }
@@ -3176,47 +3832,20 @@ sub getListFiles
             if ($execute) { $win->lblPbCount->Text("$count/$nbrSubFolders"); }
             else          { $winPb->lblCount->Text("$count/$nbrSubFolders"); }
           } else { $nbrSubFolders++; }
-          # No filter or Only Folders
-          if (!$filter or $filter == 1) { $$refListFiles{$filePath} = 0; }
-          # Filter: Regex
-          elsif ($filter == 3) {
-            # Regex option is checked
-            if (!$win->chFiltersContainsRegex->Checked()) { $regex = quotemeta($regex); }
-            if (!$win->chFiltersContainsFileOnly->Checked()) {
-              # Test Regex
-              if (($win->chFiltersContainsCase->Checked()  and $file =~ /$regex/) or
-                  (!$win->chFiltersContainsCase->Checked() and $file =~ /$regex/i)) {
-                $$refListFiles{$filePath} = 0;
-              }
-            }
+          
+          # No filter or Only Folders (single filter)
+          if (!$nbrFilters or ($nbrFilters == 1 and $onlyFolders)) {
+            $$refListFiles{$filePath} = 0;
+          # Filter
+          } elsif ($nbrFilters and &testFilters($dir, $refFilters, $nbrFilters, $file, $filePath, $onlyFolders)) {
+            $$refListFiles{$filePath} = 0;
           }
-        } elsif (!-d $filePath and -e $filePath) {                                                # It's a file
+        } elsif (!-d $filePath and -e $filePath) { # It's a file
           # No filter
-          if    (!$filter) { $$refListFiles{$filePath} = 0; }
-          # Filter: Only Folders, continue
-          elsif ($filter == 1) { next; }
-          # Filter: Regex
-          elsif ($filter == 3) {
-            # Test Regex
-            if (($win->chFiltersContainsCase->Checked()  and $file =~ /$regex/) or
-                (!$win->chFiltersContainsCase->Checked() and $file =~ /$regex/i)) {
-              $$refListFiles{$filePath} = 0;
-            }
-          }
-          # Filter: Last accessed or Last modified
-          elsif ($filter == 4 or $filter == 5) {
-            my $cmpDateUT;
-            if ($filter == 4) { $cmpDateUT = (stat($filePath))[8]; }
-            else              { $cmpDateUT = (stat($filePath))[9]; }
-            if (&cmpDates($filePath, $selDateUT, $cmpDateUT, $dateOp)) {
-              $$refListFiles{$filePath} = 0;
-            }
-          }
-          # Filter: File size
-          elsif ($filter == 2) {
-            if (&cmpFileSize($filePath, $selSize, $sizeOp)) {
-              $$refListFiles{$filePath} = 0;
-            }
+          if    (!$nbrFilters) { $$refListFiles{$filePath} = 0; }
+          # Filter match
+          elsif ($nbrFilters and &testFilters($dir, $refFilters, $nbrFilters, $file, $filePath, $onlyFolders)) {
+            $$refListFiles{$filePath} = 0;
           }
         }
       }
@@ -3238,52 +3867,20 @@ sub getListFiles
               $nbrSubFolders++;
               if ($execute) { $win->lblPbCount->Text("$count/$nbrSubFolders"); }
               else          { $winPb->lblCount->Text("$count/$nbrSubFolders"); }
-              # No filter or Only Folders
-              if (!$filter or $filter == 1) { $$refListFiles{$filePath} = 0; }
-              # Filter: Regex
-              elsif ($filter == 3) {
-                # Regex option is checked
-                if (!$win->chFiltersContainsRegex->Checked()) { $regex = quotemeta($regex); }
-                my $relPath = $filePath =~ s/\Q$dir\E\\//r;
-                if (!$win->chFiltersContainsFileOnly->Checked()) {
-                  # Test Regex
-                  if (($win->chFiltersContainsCase->Checked()  and $relPath =~ /$regex/) or
-                      (!$win->chFiltersContainsCase->Checked() and $relPath =~ /$regex/i)) {
-                    $$refListFiles{$filePath} = 0;
-                  }
-                }
+              
+              # No filter or Only Folders (single filter)
+              if (!$nbrFilters or ($nbrFilters == 1 and $onlyFolders)) {
+                $$refListFiles{$filePath} = 0;
+              # Filter
+              } elsif ($nbrFilters and &testFilters($dir, $refFilters, $nbrFilters, $file, $filePath, $onlyFolders)) {
+                $$refListFiles{$filePath} = 0;
               }
-            } elsif (!-d $filePath and -e $filePath) {                                          # It's a file
+            } elsif (!-d $filePath and -e $filePath) { # It's a file
               # No filter
-              if    (!$filter) { $$refListFiles{$filePath} = 0; }
-              # Filter: Only Folders, continue
-              elsif ($filter == 1) { next; }
-              # Filter: Regex
-              elsif ($filter == 3) {
-                # Regex option is checked
-                if (!$win->chFiltersContainsRegex->Checked()) { $regex = quotemeta($regex); }
-                my $relPath = $filePath =~ s/\Q$dir\E\\//r;
-                if ($win->chFiltersContainsFileOnly->Checked()) { $relPath = $file; }
-                # Test Regex
-                if (($win->chFiltersContainsCase->Checked()  and $relPath =~ /$regex/) or
-                    (!$win->chFiltersContainsCase->Checked() and $relPath =~ /$regex/i)) {
-                  $$refListFiles{$filePath} = 0;
-                }
-              }
-              # Filter: Last accessed or Last modified
-              elsif ($filter == 4 or $filter == 5) {
-                my $cmpDateUT;
-                if ($filter == 4) { $cmpDateUT = (stat($filePath))[8]; }
-                else              { $cmpDateUT = (stat($filePath))[9]; }
-                if (&cmpDates($filePath, $selDateUT, $cmpDateUT, $dateOp)) {
-                  $$refListFiles{$filePath} = 0;
-                }
-              }
-              # Filter: File size
-              elsif ($filter == 2) {
-                if (&cmpFileSize($filePath, $selSize, $sizeOp)) {
-                  $$refListFiles{$filePath} = 0;
-                }
+              if    (!$nbrFilters) { $$refListFiles{$filePath} = 0; }
+              # Filter match
+              elsif ($nbrFilters and &testFilters($dir, $refFilters, $nbrFilters, $file, $filePath, $onlyFolders)) {
+                $$refListFiles{$filePath} = 0;
               }
             }
           }
@@ -3304,6 +3901,122 @@ sub getListFiles
   }
 
 }  #--- End getListFiles
+
+#--------------------------#
+sub setFilters
+#--------------------------#
+{
+  # Local variables
+  my %filters;
+  my $i = 1;
+  
+  # Gather filter list
+  for (my $row = 1; $row <= $win->gridFilter->GetRows(); $row++) {
+    my $firstVal = $win->gridFilter->GetCellText($row, 0);
+    if ($firstVal) {
+      $filters{$i}{'Operator'} = $win->gridFilter->GetCellText($row, 0);
+      if ($win->gridFilter->GetCellText($row, 1)) { $filters{$i}{'Type'}      = $win->gridFilter->GetCellText($row, 1); }
+      if ($win->gridFilter->GetCellText($row, 2)) { $filters{$i}{'TypeOp'}    = $win->gridFilter->GetCellText($row, 2); }
+      if ($win->gridFilter->GetCellText($row, 3)) { $filters{$i}{'Flags'}     = $win->gridFilter->GetCellText($row, 3); }
+      if ($win->gridFilter->GetCellText($row, 4)) { $filters{$i}{'SearchStr'} = $win->gridFilter->GetCellText($row, 4); }
+      if ($filters{$i}{'Type'} eq $STR{'rbFiltersLastAccess'} or $filters{$i}{'Type'} eq $STR{'rbFiltersLastModif'}) {
+        my ($y, $m, $d) = split(/\-/, $filters{$i}{'SearchStr'});
+        $filters{$i}{'DateUT'} = timelocal(0,0,0,$d,$m-1,$y); # Store in Unixtime format
+      }
+    }
+    $i++;
+  }
+  
+  return(\%filters);  
+  
+}  #--- End setFilters
+
+#--------------------------#
+sub testFilters
+#--------------------------#
+{
+  # Local variables
+  my ($dir, $refFilters, $nbrFilters, $file, $path, $onlyFolders) = @_;
+  my $match       = 0;
+  
+  # Path is a folder, only Contains filter applies
+  if ($path and -d $path) {
+    for (my $i = 1; $i <= $nbrFilters; $i++) {
+      if ($$refFilters{$i}{'Type'} eq $STR{'rbFiltersContains'}) {
+        # Regex option is checked
+        my $expr;
+        my ($case, $regex, $fileOnly) = split(/\-/, $$refFilters{$i}{'Flags'});
+        if (!$regex) { $expr = quotemeta($$refFilters{$i}{'SearchStr'}); }
+        else         { $expr = $$refFilters{$i}{'SearchStr'};            }
+        if (!$fileOnly and
+            ((!$case and $path =~ /$expr/i) or
+             ($case and $path =~ /$expr/))) {
+          # Match and next operator is OR
+          if (exists($$refFilters{$i+1}{'Operator'}) and $$refFilters{$i+1}{'Operator'} eq $STR{'OR'}) {
+            return(1);
+          } else { $match = 1; }
+        # Don't match and operator is AND
+        } elsif (exists($$refFilters{$i+1}{'Operator'}) and $$refFilters{$i+1}{'Operator'} eq $STR{'AND'}) { return(0); }
+      # Filter size, Last accessed or Last modified apply to files only
+      } elsif (($$refFilters{$i}{'Type'} eq $STR{'rbFiltersSize'}       or
+                $$refFilters{$i}{'Type'} eq $STR{'rbFiltersLastAccess'} or
+                $$refFilters{$i}{'Type'} eq $STR{'rbFiltersLastModif'}) and
+               ((exists($$refFilters{$i+1}{'Operator'}) and $$refFilters{$i+1}{'Operator'} eq $STR{'AND'}) or
+                ($$refFilters{$i}{'Operator'} ne $STR{'OR'}))) {
+        return(0);
+      }
+    }
+    
+  # Path is a file
+  } elsif (!$onlyFolders) {
+    for (my $i = 1; $i <= $nbrFilters; $i++) {
+      my $matchTmp = 0;
+      # Contains filter
+      if      ($$refFilters{$i}{'Type'} eq $STR{'rbFiltersContains'}) {
+        my $expr;
+        my ($case, $regex, $fileOnly) = split(/\-/, $$refFilters{$i}{'Flags'});
+        if (!$regex) { $expr = quotemeta($$refFilters{$i}{'SearchStr'}); }
+        else         { $expr = $$refFilters{$i}{'SearchStr'};            }
+        my $relPath = $path =~ s/\Q$dir\E\\//r;
+        if ($fileOnly) { $relPath = $file; }
+        if ((!$case and $path =~ /$expr/i) or ($case and $path =~ /$expr/)) {
+          $matchTmp = 1;
+        } else { $matchTmp = 0; }
+      # File size filter
+      } elsif ($$refFilters{$i}{'Type'} eq $STR{'rbFiltersSize'}) {
+        if (&cmpFileSize($path, $$refFilters{$i}{'SearchStr'}, $$refFilters{$i}{'TypeOp'})) {
+          $matchTmp = 1;
+        } else { $matchTmp = 0; }
+      # Filter: Last accessed or Last modified
+      } elsif ($$refFilters{$i}{'Type'} eq $STR{'rbFiltersLastAccess'} or $$refFilters{$i}{'Type'} eq $STR{'rbFiltersLastModif'}) {
+        my $cmpDateUT;
+        if ($$refFilters{$i}{'Type'} eq $STR{'rbFiltersLastAccess'}) { $cmpDateUT = (stat($path))[8]; }
+        else                                                         { $cmpDateUT = (stat($path))[9]; }
+        if (&cmpDates($path, $$refFilters{$i}{'DateUT'}, $cmpDateUT, $$refFilters{$i}{'TypeOp'})) {
+          $matchTmp = 1;
+        } else { $matchTmp = 0; }
+      }
+      
+      # Match
+      if ($matchTmp and exists($$refFilters{$i+1}{'Operator'})) {
+        # Next operator is OR
+        if ($$refFilters{$i+1}{'Operator'} eq $STR{'OR'}) { return(1);  } # No need to check other filter
+        else                                              { $match = 1; }
+      # Don't match
+      } elsif (!$matchTmp) {
+        # Next or actual operator is AND
+        if ((exists($$refFilters{$i+1}{'Operator'}) and
+             ($$refFilters{$i+1}{'Operator'} eq $STR{'AND'}) or
+              ($$refFilters{$i}{'Operator'} eq $STR{'AND'}))) { return(0); } # No need to check other filter
+        else { $match = 0; }
+      } else { $match = $matchTmp; }
+    }
+  }
+  
+  if ($match) { return(1); }
+  else        { return(0); }
+
+}  #--- End testFilters
 
 #--------------------------#
 sub cmpDates
@@ -3329,9 +4042,9 @@ sub cmpFileSize
 #--------------------------#
 {
   # Local variables
-  my ($filePath, $selSize, $sizeOp) = @_;
+  my ($filePath, $searchStr, $sizeOp) = @_;
   my $fileSize = (stat($filePath))[7];
-  my $sizeUnit = $win->cbFiltersSizeUnit->GetString($win->cbFiltersSizeUnit->GetCurSel());
+  my ($cmpSize, $sizeUnit) = split(/ /, $searchStr);
 
   # Round down file size
   if    ($sizeUnit eq $STR{'b'} ) { $fileSize = $fileSize; }
@@ -3340,9 +4053,9 @@ sub cmpFileSize
   elsif ($sizeUnit eq $STR{'Gb'}) { $fileSize = $fileSize / 1024 / 1024 / 1024; }
   $fileSize = sprintf("%.0f", $fileSize);
 
-  if ($sizeOp eq $STR{'Smaller'} and $fileSize  < $selSize) { return(1); }
-  if ($sizeOp eq $STR{'Equal'}   and $fileSize == $selSize) { return(1); }
-  if ($sizeOp eq $STR{'Bigger'}  and $fileSize  > $selSize) { return(1); }
+  if ($sizeOp eq $STR{'Smaller'} and $fileSize  < $cmpSize) { return(1); }
+  if ($sizeOp eq $STR{'Equal'}   and $fileSize == $cmpSize) { return(1); }
+  if ($sizeOp eq $STR{'Bigger'}  and $fileSize  > $cmpSize) { return(1); }
   
   return(0);
 
@@ -3353,12 +4066,9 @@ sub listFilesReport
 #--------------------------#
 {
   # Local variables
-  my $refListFiles = shift;
-  my $nbrFiles     = scalar(keys %{$refListFiles});
-  my $dirReport    = $win->tfReportDir->Text();
-  my $logging      = 0;
-  my $curr         = 0;
-  my $nbrError     = 0;
+  my $refListFiles   = shift;
+  my $nbrFiles       = scalar(keys %{$refListFiles});
+  my $logging        = 0;
   my $logFile;
   my $fhLog;
   
@@ -3371,7 +4081,7 @@ sub listFilesReport
     if (open($fhLog, '>', $logFile)) { flock($fhLog, 2); $logging = 1; }
   }
   
-  if ($dirReport) {
+  if ($win->tfReportDir->Text() and -d $win->tfReportDir->Text()) {
     # Show progress
     $win->pb->SetRange(0, $nbrFiles);
     $win->pb->SetPos(0);
@@ -3379,44 +4089,492 @@ sub listFilesReport
     $win->lblPbCount->Text("0 / $nbrFiles");
       
     # Options
-    my $chListFilesOpt1 = $win->chListFilesOpt1->Checked(); # Full path
-    my $chListFilesOpt2 = $win->chListFilesOpt2->Checked(); # Filename
-    my $chListFilesOpt3 = $win->chListFilesOpt3->Checked(); # MD5
-    my $chListFilesOpt4 = $win->chListFilesOpt4->Checked(); # SHA1
-    my $chListFilesOpt5 = $win->chListFilesOpt5->Checked(); # File details
-    my $chListFilesOpt6 = $win->chListFilesOpt6->Checked(); # Number of lines
+    my $chListFilesOptFP    = $win->chListFilesOptFP->Checked();          # Full path
+    my $chListFilesOptFN    = $win->chListFilesOptFN->Checked();          # Filename
+    my $chListFilesHV1      = $winHashVal->chListFilesHV1->Checked();     # MD5
+    my $chListFilesHV2      = $winHashVal->chListFilesHV2->Checked();     # SHA1
+    my $chListFilesHV3      = $winHashVal->chListFilesHV3->Checked();     # SHA256
+    my $chListFilesHV4      = $winHashVal->chListFilesHV4->Checked();     # SHA512
+    my $chListFilesFD1      = $winFileDetails->chListFilesFD1->Checked(); # File size
+    my $chListFilesFD2      = $winFileDetails->chListFilesFD2->Checked(); # Last accessed
+    my $chListFilesFD3      = $winFileDetails->chListFilesFD3->Checked(); # Last modified
+    my $chListFilesOptNbrL  = $win->chListFilesOptNbrL->Checked();        # Number of lines
+    
+    # HTML format
+    my $formatReport   = $win->cbReportFormat->GetCurSel();
+    my ($reportFilename, $nbrError);
+    if      ($formatReport == 1) {
+      ($reportFilename, $nbrError) = &writeListFilesReportHTML( $refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN,
+                                                                $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4,
+                                                                $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrL,
+                                                                $logging, $fhLog);
+    # XLSX format
+    } elsif ($formatReport == 2) {
+      ($reportFilename, $nbrError) = &writeListFilesReportXLSX( $refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN,
+                                                                $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4,
+                                                                $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrL,
+                                                                $logging, $fhLog);
+    # Text format
+    } else {
+      ($reportFilename, $nbrError) = &writeListFilesReportTXT(  $refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN,
+                                                                $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4,
+                                                                $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrL,
+                                                                $logging, $fhLog);
+    }
+     
+    # Open report
+    if ($win->chOpenReport->Checked()) { $win->ShellExecute('open', $reportFilename,'','',1); }
+    
+    # Logging
+    if ($logging) {
+      close($fhLog);
+      if ($nbrError) {
+        my $answer = Win32::GUI::MessageBox($win, $STR{'EndProcess1'}.' '.$nbrError." $STR{'EndProcess2'} $STR{'EndProcess3'}", $STR{'Process'}, 0x40024);
+        # Open the log
+        if ($answer == 6) { $win->ShellExecute('open', $logFile,'','',1); }
+      }
+    }
+  }
+
+}  #--- End listFilesReport
+
+#--------------------------#
+sub writeListFilesReportHTML
+#--------------------------#
+{
+  # Local variables
+  my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesHV1, $chListFilesHV2, $chListFilesHV3,
+      $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrL, $logging, $fhLog,) = @_;
+  my $searchedFolder = $win->tfInput->Text()."\\";
+  my $nbrError       = 0;
+  my $curr           = 0;
+  
+  # Write the report
+  my ($s,$min,$h,$d,$m,$y) = (&date(time))[0,1,2,3,4,5];
+  my $reportFilename = $win->tfReportDir->Text()."\\"."XL-FileTools ".$STR{'report'}.'-'."$y$m$d\_$h$min$s".'.html'; # Ex.: XL-FileTools report-20160520_082215.html
+  if (open(my $fhReport, '>', $reportFilename)) {
+    flock($fhReport, 2);
+    print $fhReport "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">\n";
+    print $fhReport "<html>\n<head>\n<title>XL-FileTools $STR{'report'} $y-$m-$d $h:$min:$s</title>\n";
+    print $fhReport "<style>\n";
+    print $fhReport "table, td { border-collapse: collapse; border: 1px solid black; padding: 5px; }\n";
+    print $fhReport "td { font-size:11pt; vertical-align: top; white-space: nowrap; }\n";
+    print $fhReport ".header { text-align: center; font-weight: bold }\n";
+    print $fhReport "</style>\n";
+    print $fhReport "</head>\n";
+    print $fhReport "<body style=\"font-family: Calibri, Verdana, Arial;\">\n";
+    print $fhReport "<table align=\"center\">\n";
     
     # File Header
-    my $header;
-    if (!$win->chListFilesOpt7->Checked()) {
-      if ($chListFilesOpt1) { $header .= $STR{'chListFilesOpt1'} . "\t"; } # Full path
-      if ($chListFilesOpt2) { $header .= $STR{'chListFilesOpt2'} . "\t"; } # Filename
-      if ($chListFilesOpt3) { $header .= $STR{'chListFilesOpt3'} . "\t"; } # MD5
-      if ($chListFilesOpt4) { $header .= $STR{'chListFilesOpt4'} . "\t"; } # SHA1
-      if ($chListFilesOpt5) {                                              # File details
-        $header .= $STR{'rbFiltersSize'}       . "\t";
-        $header .= $STR{'rbFiltersLastAccess'} . "\t";
-        $header .= $STR{'rbFiltersLastModif'}  . "\t";
+    if (!$win->chListFilesOptNH->Checked()) {
+      print $fhReport "<tr>\n";
+      if ($chListFilesOptFP)    { print $fhReport "<td class=\"header\">$STR{'chListFilesOptFP'}</td>\n";    } # Full path
+      if ($chListFilesOptFN)    { print $fhReport "<td class=\"header\">$STR{'chListFilesOptFN'}</td>\n";    } # Filename
+      if ($chListFilesHV1)      { print $fhReport "<td class=\"header\">$STR{'chListFilesHV1'}</td>\n";      } # MD5
+      if ($chListFilesHV2)      { print $fhReport "<td class=\"header\">$STR{'chListFilesHV2'}</td>\n";      } # SHA1
+      if ($chListFilesHV3)      { print $fhReport "<td class=\"header\">$STR{'chListFilesHV3'} </td>\n";     } # SHA256
+      if ($chListFilesHV4)      { print $fhReport "<td class=\"header\">$STR{'chListFilesHV4'}</td>\n";      } # SHA512
+      if ($chListFilesFD1)      { print $fhReport "<td class=\"header\">$STR{'rbFiltersSize'}</td>\n";       } # File size
+      if ($chListFilesFD2)      { print $fhReport "<td class=\"header\">$STR{'rbFiltersLastAccess'}</td>\n"; } # Last accessed
+      if ($chListFilesFD3)      { print $fhReport "<td class=\"header\">$STR{'rbFiltersLastModif'}</td>\n";  } # Last modified
+      if ($chListFilesOptNbrL)  { print $fhReport "<td class=\"header\">$STR{'chListFilesOptNbrL'}</td>\n";  } # Number of lines
+      print $fhReport "</tr>\n";
+    }
+    foreach my $file (sort { $a cmp $b } keys %{$refListFiles}) {
+      if ($file) {
+        if    (-d $file and $win->chListFilesOptNF->Checked()) { } # No folder
+        elsif (-d $file and $file eq $searchedFolder         ) { } # Searched folder
+        else {
+          my (@stats);
+          if (!-d $file and ($chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3)) { (@stats) = stat($file); } # File details
+          $win->lblPbCurr->Text($STR{'Processing'}.': '.$file);
+          print $fhReport "<tr>\n";
+          # Full path
+          if ($chListFilesOptFP) { print $fhReport "<td>$file</td>\n"; }
+          # Filename
+          if ($chListFilesOptFN) {
+            if (!-d $file) { # For file only
+              my @parts = split(/\\/, $file);
+              my $filename = pop(@parts);
+              print $fhReport "<td>$filename</td>\n";
+            } else { print $fhReport "<td>&nbsp;</td>\n"; }
+          }
+          # MD5
+          if ($chListFilesHV1) {
+            if (!-d $file) { # For file only
+              $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');
+              if (my $digestMD5 = file_md5_hex($file)) {
+                if ($CONFIG{'HASH_LOWERCASE'}) { print $fhReport "<td>".lc($digestMD5)."</td>\n"; }
+                else                           { print $fhReport "<td>".uc($digestMD5)."</td>\n"; }
+              } else {
+                print $fhReport "<td>&nbsp;</td>\n";
+                $nbrError++;
+                if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingMD5'}: $file\n"; }
+              }
+            } else { print $fhReport "<td>&nbsp;</td>\n"; }
+          }
+          # SHA1
+          if ($chListFilesHV2) {
+            if (!-d $file) { # For file only
+              $win->lblPbCurr->Text($STR{'HashingSHA1'}.': '.$file.'...');
+              if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
+                if ($CONFIG{'HASH_LOWERCASE'}) { print $fhReport "<td>".lc($digestSHA1)."</td>\n"; }
+                else                           { print $fhReport "<td>".uc($digestSHA1)."</td>\n"; }
+              } else {
+                print $fhReport "<td></td>\n";
+                $nbrError++;
+                if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA1'}: $file\n"; }
+              }
+            } else { print $fhReport "<td></td>\n"; }
+          }
+          # SHA256
+          if ($chListFilesHV3) {
+            if (!-d $file) { # For file only
+              $win->lblPbCurr->Text($STR{'HashingSHA256'}.': '.$file.'...');
+              if (my $digestSHA256 = Digest::SHA->new(256)->addfile($file,"b")->hexdigest) {
+                if ($CONFIG{'HASH_LOWERCASE'}) { print $fhReport "<td>".lc($digestSHA256)."</td>\n"; }
+                else                           { print $fhReport "<td>".uc($digestSHA256)."</td>\n"; }
+              } else {
+                print $fhReport "<td></td>\n";
+                $nbrError++;
+                if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA256'}: $file\n"; }
+              }
+            } else { print $fhReport "<td></td>\n"; }
+          }
+          # SHA512
+          if ($chListFilesHV4) {
+            if (!-d $file) { # For file only
+              $win->lblPbCurr->Text($STR{'HashingSHA512'}.': '.$file.'...');
+              if (my $digestSHA512 = Digest::SHA->new(512)->addfile($file,"b")->hexdigest) {
+                if ($CONFIG{'HASH_LOWERCASE'}) { print $fhReport "<td>".lc($digestSHA512)."</td>\n"; }
+                else                           { print $fhReport "<td>".uc($digestSHA512)."</td>\n"; }
+              } else {
+                print $fhReport "<td>&nbsp;</td>\n";
+                $nbrError++;
+                if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA512'}: $file</td>\n"; }
+              }
+            } else { print $fhReport "<td>\t"; }
+          }
+          # File size
+          if ($chListFilesFD1) {
+            if (!-d $file) { # For file only
+              if ($stats[7]) { print $fhReport "<td>$stats[7]</td>\n"; }
+              else           { print $fhReport "<td>&nbsp;</td>\n";          }
+            }
+          }
+          # Last accessed
+          if ($chListFilesFD2) {
+            if (!-d $file) { # For file only
+              if ($stats[8]) {
+                my ($s,$min,$h,$d,$m,$y)  = (&date($stats[8]))[0,1,2,3,4,5];
+                print $fhReport "<td>$y-$m-$d $h:$min:$s</td>\n";
+              } else { print $fhReport "<td>&nbsp;</td>\n"; }
+            }
+          }
+          # Last modified
+          if ($chListFilesFD3) {
+            if (!-d $file) { # For file only
+              if ($stats[9]) {
+                my ($s,$min,$h,$d,$m,$y)  = (&date($stats[9]))[0,1,2,3,4,5];
+                print $fhReport "<td>$y-$m-$d $h:$min:$s</td>\n";
+              } else { print $fhReport "<td>&nbsp;</td>\n"; }
+            }
+          }
+          # Number of lines
+          if ($chListFilesOptNbrL) {
+            if (-T $file) { # For text file only
+              $win->lblPbCurr->Text($STR{'NumberLines'}.': '.$file.'...');
+              my $nbrLines = 0;
+              if (open my $fh, '<', $file) {
+                while (sysread $fh, my $buffer, 4096) { $nbrLines += ($buffer =~ tr/\n//); }
+                close($fh);
+              } else {
+                $nbrError++;
+                if ($logging) { print $fhLog "$STR{'Error'} $STR{'Reading'}: $file: $!\n"; }
+              }
+              if ($nbrLines) { print $fhReport "<td>$nbrLines</td>\n"; }
+              else { print $fhReport "<td>0</td>\n"; }
+            } else { print $fhReport "<td>&nbsp;</td>\n"; }
+          }
+          
+          print $fhReport "</tr>\n";
+        }
       }
-      if ($chListFilesOpt6) { $header .= $STR{'chListFilesOpt6'} . "\t"; } # Number of lines
-      chop($header);
+      
+      # Progress
+      $curr++;
+      $win->lblPbCount->Text("$curr / $nbrFiles");
+      $win->pb->StepIt();
     }
     
-    # Write the report
-    my ($s,$min,$h,$d,$m,$y) = (&date(time))[0,1,2,3,4,5];
-    my $reportFilename = $dirReport."\\"."XL-FileTools ".$STR{'report'}.'-'."$y$m$d\_$h$min$s".'.txt'; # Ex.: XL-FileTools report-20160520_082215.txt
-    if (open(my $fhReport, '>', $reportFilename)) {
-      flock($fhReport, 2);
-      if (!$win->chListFilesOpt7->Checked()) { print $fhReport "$header\n"; }
+    print $fhReport "</table>\n</body>\n</html>\n";
+    close($fhReport);
+    return($reportFilename, $nbrError);
+  }
+  
+}  #--- End writeListFilesReportHTML
+
+#--------------------------#
+sub writeListFilesReportXLSX
+#--------------------------#
+{
+  # Local variables
+  my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesHV1, $chListFilesHV2, $chListFilesHV3,
+      $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrL, $logging, $fhLog,) = @_;
+  my $searchedFolder = $win->tfInput->Text()."\\";
+  my $nbrError       = 0;
+  my $curr           = 0;
+  
+  # Write the report
+  my ($s,$min,$h,$d,$m,$y) = (&date(time))[0,1,2,3,4,5];
+  my $reportFilename = $win->tfReportDir->Text()."\\"."XL-FileTools ".$STR{'report'}.'-'."$y$m$d\_$h$min$s".'.xlsx'; # Ex.: XL-FileTools report-20160520_082215.xlsx
+  if (my $excel = Excel::Writer::XLSX->new($reportFilename)) {
+    if (my $sheet = $excel->add_worksheet($STR{'lblFunctions1T'})) {
+      # Column size
+      my $maxWidthCol1  = length($STR{'chListFilesOptFP'});
+      my $maxWidthCol2  = length($STR{'chListFilesOptFN'});
+      my $maxWidthCol3  = length($STR{'chListFilesHV1'});
+      my $maxWidthCol4  = length($STR{'chListFilesHV2'});
+      my $maxWidthCol5  = length($STR{'chListFilesHV3'});
+      my $maxWidthCol6  = length($STR{'chListFilesHV4'});
+      my $maxWidthCol7  = length($STR{'rbFiltersSize'});
+      my $maxWidthCol8  = length($STR{'rbFiltersLastAccess'});
+      my $maxWidthCol9  = length($STR{'rbFiltersLastModif'});
+      my $maxWidthCol10 = length($STR{'chListFilesOptNbrL'});
+  
+      # Header
+      my $i = 0;
+      if (!$win->chListFilesOptNH->Checked()) {
+        my $formatHeader = $excel->add_format();
+        $formatHeader->set_bold();
+        $formatHeader->set_align( 'center' );
+        $formatHeader->set_align( 'vcenter' );
+        my $j = 0; # Column no
+        if ($chListFilesOptFP)    { $sheet->write( 0, $j, $STR{'chListFilesOptFP'}    , $formatHeader ); $j++; } # Full path
+        if ($chListFilesOptFN)    { $sheet->write( 0, $j, $STR{'chListFilesOptFN'}    , $formatHeader ); $j++; } # Filename
+        if ($chListFilesHV1)      { $sheet->write( 0, $j, $STR{'chListFilesHV1'}      , $formatHeader ); $j++; } # MD5
+        if ($chListFilesHV2)      { $sheet->write( 0, $j, $STR{'chListFilesHV2'}      , $formatHeader ); $j++; } # SHA1
+        if ($chListFilesHV3)      { $sheet->write( 0, $j, $STR{'chListFilesHV3'}      , $formatHeader ); $j++; } # SHA256
+        if ($chListFilesHV4)      { $sheet->write( 0, $j, $STR{'chListFilesHV4'}      , $formatHeader ); $j++; } # SHA512
+        if ($chListFilesFD1)      { $sheet->write( 0, $j, $STR{'rbFiltersSize'}       , $formatHeader ); $j++; } # File size
+        if ($chListFilesFD2)      { $sheet->write( 0, $j, $STR{'rbFiltersLastAccess'} , $formatHeader ); $j++; } # Last accessed
+        if ($chListFilesFD3)      { $sheet->write( 0, $j, $STR{'rbFiltersLastModif'}  , $formatHeader ); $j++; } # Last modified
+        if ($chListFilesOptNbrL)  { $sheet->write( 0, $j, $STR{'chListFilesOptNbrL'}  , $formatHeader ); $j++; } # Number of lines
+        $i++;
+      }
       foreach my $file (sort { $a cmp $b } keys %{$refListFiles}) {
-        if (-d $file and $win->chListFilesOpt8->Checked()) { } # No folder
+        my $j = 0; # Column no
+        if ($file) {
+          if    (-d $file and $win->chListFilesOptNF->Checked()) { } # No folder
+          elsif (-d $file and $file eq $searchedFolder         ) { } # Searched folder
+          else {
+            my (@stats);
+            if (!-d $file and ($chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3)) { (@stats) = stat($file); } # File details
+            $win->lblPbCurr->Text($STR{'Processing'}.': '.$file);
+            # Full path
+            if ($chListFilesOptFP) {
+              $sheet->write_string($i, $j, $file);
+              $j++;
+              if (length($file) > $maxWidthCol1) { $maxWidthCol1 = length($file); }
+            }
+            # Filename
+            if ($chListFilesOptFN) {
+              if (!-d $file) { # For file only
+                my @parts = split(/\\/, $file);
+                my $filename = pop(@parts);
+                $sheet->write_string($i, $j, $filename);
+                if (length($filename) > $maxWidthCol2) { $maxWidthCol2 = length($filename); }
+              }
+              $j++;
+            }
+            # MD5
+            if ($chListFilesHV1) {
+              if (!-d $file) { # For file only
+                $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');
+                if (my $digestMD5 = file_md5_hex($file)) {
+                  if ($CONFIG{'HASH_LOWERCASE'}) { $sheet->write_string($i, $j, lc($digestMD5)); }
+                  else                           { $sheet->write_string($i, $j, uc($digestMD5)); }
+                  if (length($digestMD5) > $maxWidthCol3) { $maxWidthCol3 = length($digestMD5); }
+                } else {
+                  $nbrError++;
+                  if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingMD5'}: $file\n"; }
+                }
+              }
+              $j++;
+            }
+            # SHA1
+            if ($chListFilesHV2) {
+              if (!-d $file) { # For file only
+                $win->lblPbCurr->Text($STR{'HashingSHA1'}.': '.$file.'...');
+                if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
+                  if ($CONFIG{'HASH_LOWERCASE'}) { $sheet->write_string($i, $j, lc($digestSHA1)); }
+                  else                           { $sheet->write_string($i, $j, uc($digestSHA1)); }
+                  if (length($digestSHA1) > $maxWidthCol4) { $maxWidthCol4 = length($digestSHA1); }
+                } else {
+                  $nbrError++;
+                  if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA1'}: $file\n"; }
+                }
+              }
+              $j++;
+            }
+            # SHA256
+            if ($chListFilesHV3) {
+              if (!-d $file) { # For file only
+                $win->lblPbCurr->Text($STR{'HashingSHA256'}.': '.$file.'...');
+                if (my $digestSHA256 = Digest::SHA->new(256)->addfile($file,"b")->hexdigest) {
+                  if ($CONFIG{'HASH_LOWERCASE'}) { $sheet->write_string($i, $j, lc($digestSHA256)); }
+                  else                           { $sheet->write_string($i, $j, uc($digestSHA256)); }
+                  if (length($digestSHA256) > $maxWidthCol5) { $maxWidthCol5 = length($digestSHA256); }
+                  
+                } else {
+                  $nbrError++;
+                  if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA256'}: $file\n"; }
+                }
+              }
+              $j++;
+            }
+            # SHA512
+            if ($chListFilesHV4) {
+              if (!-d $file) { # For file only
+                $win->lblPbCurr->Text($STR{'HashingSHA512'}.': '.$file.'...');
+                if (my $digestSHA512 = Digest::SHA->new(512)->addfile($file,"b")->hexdigest) {
+                  if ($CONFIG{'HASH_LOWERCASE'}) { $sheet->write_string($i, $j, lc($digestSHA512)); }
+                  else                           { $sheet->write_string($i, $j, uc($digestSHA512)); }
+                  if (length($digestSHA512) > $maxWidthCol6) { $maxWidthCol6 = length($digestSHA512); }
+                } else {
+                  $nbrError++;
+                  if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA512'}: $file\n"; }
+                }
+              }
+              $j++;
+            }
+            # File size
+            if ($chListFilesFD1) {
+              if (!-d $file) { # For file only
+                if ($stats[7]) {
+                  $sheet->write_string($i, $j, $stats[7]);
+                  if (length($stats[7]) > $maxWidthCol7) { $maxWidthCol7 = length($stats[7]); }
+                }
+              }
+              $j++;
+            }
+            # Last accessed
+            if ($chListFilesFD2) {
+              if (!-d $file) { # For file only
+                if ($stats[8]) {
+                  my ($s,$min,$h,$d,$m,$y)  = (&date($stats[8]))[0,1,2,3,4,5];
+                  $sheet->write_string($i, $j, "$y-$m-$d $h:$min:$s");
+                  if (length("$y-$m-$d $h:$min:$s") > $maxWidthCol8) { $maxWidthCol8 = length("$y-$m-$d $h:$min:$s"); }
+                }
+              }
+              $j++;
+            }
+            # Last modified
+            if ($chListFilesFD3) {
+              if (!-d $file) { # For file only
+                if ($stats[9]) {
+                  my ($s,$min,$h,$d,$m,$y)  = (&date($stats[9]))[0,1,2,3,4,5];
+                  $sheet->write_string($i, $j, "$y-$m-$d $h:$min:$s");
+                  if (length("$y-$m-$d $h:$min:$s") > $maxWidthCol9) { $maxWidthCol9 = length("$y-$m-$d $h:$min:$s"); }
+                }
+              }
+              $j++;
+            }
+            # Number of lines
+            if ($chListFilesOptNbrL) {
+              if (-T $file) { # For text file only
+                $win->lblPbCurr->Text($STR{'NumberLines'}.': '.$file.'...');
+                my $nbrLines = 0;
+                if (open my $fh, '<', $file) {
+                  while (sysread $fh, my $buffer, 4096) { $nbrLines += ($buffer =~ tr/\n//); }
+                  close($fh);
+                } else {
+                  $nbrError++;
+                  if ($logging) { print $fhLog "$STR{'Error'} $STR{'Reading'}: $file: $!\n"; }
+                }
+                if ($nbrLines) {
+                  $sheet->write_string($i, $j, $nbrLines);
+                  if (length($nbrLines) > $maxWidthCol10) { $maxWidthCol10 = length($nbrLines); }
+                } else { $sheet->write_string($i, $j, 0); }
+              }
+              $j++;
+            }
+            $i++;
+          }
+        }
+        
+        # Progress
+        $curr++;
+        $win->lblPbCount->Text("$curr / $nbrFiles");
+        $win->pb->StepIt();
+      }
+      
+      # Set column width
+      my $j = 0;
+      if ($chListFilesOptFP)    { $sheet->set_column($j, $j, $maxWidthCol1);  $j++; } # Full path
+      if ($chListFilesOptFN)    { $sheet->set_column($j, $j, $maxWidthCol2);  $j++; } # Filename
+      if ($chListFilesHV1)      { $sheet->set_column($j, $j, $maxWidthCol3);  $j++; } # MD5
+      if ($chListFilesHV2)      { $sheet->set_column($j, $j, $maxWidthCol4);  $j++; } # SHA1
+      if ($chListFilesHV3)      { $sheet->set_column($j, $j, $maxWidthCol5);  $j++; } # SHA256
+      if ($chListFilesHV4)      { $sheet->set_column($j, $j, $maxWidthCol6);  $j++; } # SHA512
+      if ($chListFilesFD1)      { $sheet->set_column($j, $j, $maxWidthCol7);  $j++; } # File size
+      if ($chListFilesFD2)      { $sheet->set_column($j, $j, $maxWidthCol8);  $j++; } # Last accessed
+      if ($chListFilesFD3)      { $sheet->set_column($j, $j, $maxWidthCol9);  $j++; } # Last modified
+      if ($chListFilesOptNbrL)  { $sheet->set_column($j, $j, $maxWidthCol10); $j++; } # Number of lines
+    }
+    
+    $excel->close(); # Close the file
+    return($reportFilename, $nbrError);
+  }
+  
+}  #--- End writeListFilesReportXLSX
+
+#--------------------------#
+sub writeListFilesReportTXT
+#--------------------------#
+{
+  # Local variables
+  my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesHV1, $chListFilesHV2, $chListFilesHV3,
+      $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrL, $logging, $fhLog,) = @_;
+  my $searchedFolder = $win->tfInput->Text()."\\";
+  my $nbrError       = 0;
+  my $curr           = 0;
+  
+  # File Header
+  my $header;
+  if (!$win->chListFilesOptNH->Checked()) {
+    if ($chListFilesOptFP)    { $header .= $STR{'chListFilesOptFP'}     . "\t"; } # Full path
+    if ($chListFilesOptFN)    { $header .= $STR{'chListFilesOptFN'}     . "\t"; } # Filename
+    if ($chListFilesHV1)      { $header .= $STR{'chListFilesHV1'}       . "\t"; } # MD5
+    if ($chListFilesHV2)      { $header .= $STR{'chListFilesHV2'}       . "\t"; } # SHA1
+    if ($chListFilesHV3)      { $header .= $STR{'chListFilesHV3'}       . "\t"; } # SHA256
+    if ($chListFilesHV4)      { $header .= $STR{'chListFilesHV4'}       . "\t"; } # SHA512
+    if ($chListFilesFD1)      { $header .= $STR{'rbFiltersSize'}        . "\t"; } # File size
+    if ($chListFilesFD2)      { $header .= $STR{'rbFiltersLastAccess'}  . "\t"; } # Last accessed
+    if ($chListFilesFD3)      { $header .= $STR{'rbFiltersLastModif'}   . "\t"; } # Last modified
+    if ($chListFilesOptNbrL)  { $header .= $STR{'chListFilesOptNbrL'}   . "\t"; } # Number of lines
+    chop($header);
+  }
+  
+  # Write the report
+  my ($s,$min,$h,$d,$m,$y) = (&date(time))[0,1,2,3,4,5];
+  my $reportFilename = $win->tfReportDir->Text()."\\"."XL-FileTools ".$STR{'report'}.'-'."$y$m$d\_$h$min$s".'.txt'; # Ex.: XL-FileTools report-20160520_082215.txt
+  if (open(my $fhReport, '>', $reportFilename)) {
+    flock($fhReport, 2);
+    if (!$win->chListFilesOptNH->Checked()) { print $fhReport "$header\n"; }
+    foreach my $file (sort { $a cmp $b } keys %{$refListFiles}) {
+      if ($file) {
+        if    (-d $file and $win->chListFilesOptNF->Checked()) { } # No folder
+        elsif (-d $file and $file eq $searchedFolder         ) { } # Searched folder
         else {
+          my (@stats);
+          if (!-d $file and ($chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3)) { (@stats) = stat($file); } # File details
           $win->lblPbCurr->Text($STR{'Processing'}.': '.$file);
           my $newLine;
           # Full path
-          if ($chListFilesOpt1) { $newLine .= "$file\t"; }
+          if ($chListFilesOptFP) { $newLine .= "$file\t"; }
           # Filename
-          if ($chListFilesOpt2) {
+          if ($chListFilesOptFN) {
             if (!-d $file) { # For file only
               my @parts = split(/\\/, $file);
               my $filename = pop(@parts);
@@ -3424,7 +4582,7 @@ sub listFilesReport
             } else { $newLine .= "\t"; }
           }
           # MD5
-          if ($chListFilesOpt3) {
+          if ($chListFilesHV1) {
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');
               if (my $digestMD5 = file_md5_hex($file)) {
@@ -3438,18 +4596,10 @@ sub listFilesReport
             } else { $newLine .= "\t"; }
           }
           # SHA1
-          if ($chListFilesOpt4) {
+          if ($chListFilesHV2) {
             if (!-d $file) { # For file only
-              my $digestSHA1;
-              if (open(my $fh, $file)) {
-                if (my $sha1 = Digest::SHA1->new()) {
-                  $win->lblPbCurr->Text($STR{'HashingSHA1'}.': '.$file.'...');
-                  $sha1->addfile($fh);
-                  if ($sha1->hexdigest) { $digestSHA1 = $sha1->hexdigest; }
-                }
-                close($fh);
-              }
-              if ($digestSHA1) {
+              $win->lblPbCurr->Text($STR{'HashingSHA1'}.': '.$file.'...');
+              if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
                 if ($CONFIG{'HASH_LOWERCASE'}) { $newLine .= lc($digestSHA1) ."\t"; }
                 else                           { $newLine .= uc($digestSHA1) ."\t"; }
               } else {
@@ -3459,19 +4609,53 @@ sub listFilesReport
               }
             } else { $newLine .= "\t"; }
           }
-          # File details
-          if ($chListFilesOpt5) {
+          # SHA256
+          if ($chListFilesHV3) {
             if (!-d $file) { # For file only
-              my (@stats) = stat($file);
-              # File size
+              $win->lblPbCurr->Text($STR{'HashingSHA256'}.': '.$file.'...');
+              if (my $digestSHA256 = Digest::SHA->new(256)->addfile($file,"b")->hexdigest) {
+                if ($CONFIG{'HASH_LOWERCASE'}) { $newLine .= lc($digestSHA256) ."\t"; }
+                else                           { $newLine .= uc($digestSHA256) ."\t"; }
+              } else {
+                $newLine .= "\t";
+                $nbrError++;
+                if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA256'}: $file\n"; }
+              }
+            } else { $newLine .= "\t"; }
+          }
+          # SHA512
+          if ($chListFilesHV4) {
+            if (!-d $file) { # For file only
+              $win->lblPbCurr->Text($STR{'HashingSHA512'}.': '.$file.'...');
+              if (my $digestSHA512 = Digest::SHA->new(512)->addfile($file,"b")->hexdigest) {
+                if ($CONFIG{'HASH_LOWERCASE'}) { $newLine .= lc($digestSHA512) ."\t"; }
+                else                           { $newLine .= uc($digestSHA512) ."\t"; }
+              } else {
+                $newLine .= "\t";
+                $nbrError++;
+                if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA512'}: $file\n"; }
+              }
+            } else { $newLine .= "\t"; }
+          }
+          # File size
+          if ($chListFilesFD1) {
+            if (!-d $file) { # For file only
               if ($stats[7]) { $newLine .= "$stats[7]\t"; }
               else           { $newLine .= "\t";          }
-              # Last accessed
+            }
+          }
+          # Last accessed
+          if ($chListFilesFD2) {
+            if (!-d $file) { # For file only
               if ($stats[8]) {
                 my ($s,$min,$h,$d,$m,$y)  = (&date($stats[8]))[0,1,2,3,4,5];
                 $newLine .= "$y-$m-$d $h:$min:$s\t";
               } else { $newLine .= "\t"; }
-              # Last modified
+            }
+          }
+          # Last modified
+          if ($chListFilesFD3) {
+            if (!-d $file) { # For file only
               if ($stats[9]) {
                 my ($s,$min,$h,$d,$m,$y)  = (&date($stats[9]))[0,1,2,3,4,5];
                 $newLine .= "$y-$m-$d $h:$min:$s\t";
@@ -3479,7 +4663,7 @@ sub listFilesReport
             }
           }
           # Number of lines
-          if ($chListFilesOpt6) {
+          if ($chListFilesOptNbrL) {
             if (-T $file) { # For text file only
               $win->lblPbCurr->Text($STR{'NumberLines'}.': '.$file.'...');
               my $nbrLines = 0;
@@ -3490,40 +4674,30 @@ sub listFilesReport
                 $nbrError++;
                 if ($logging) { print $fhLog "$STR{'Error'} $STR{'Reading'}: $file: $!\n"; }
               }
-              if ($nbrLines) { $newLine .= uc($nbrLines) ."\t"; }
+              if ($nbrLines) { $newLine .= $nbrLines ."\t"; }
               else { $newLine .= "0\t"; }
             } else { $newLine .= "\t"; }
           }
           
           # Print line
-          chop($newLine);
-          print $fhReport "$newLine\n";
-        }
-        
-        # Progress
-        $curr++;
-        $win->lblPbCount->Text("$curr / $nbrFiles");
-        $win->pb->StepIt();
-      }
-      
-      close($fhReport);
-     
-      # Open report
-      if ($win->chOpenReport->Checked()) { $win->ShellExecute('open', $reportFilename,'','',1); }
-      
-      # Logging
-      if ($logging) {
-        close($fhLog);
-        if ($nbrError) {
-          my $answer = Win32::GUI::MessageBox($win, $STR{'EndProcess1'}.' '.$nbrError." $STR{'EndProcess2'} $STR{'EndProcess3'}", $STR{'Process'}, 0x40024);
-          # Open the log
-          if ($answer == 6) { $win->ShellExecute('open', $logFile,'','',1); }
+          if ($newLine) {
+            chop($newLine);
+            print $fhReport "$newLine\n";
+          }
         }
       }
+      
+      # Progress
+      $curr++;
+      $win->lblPbCount->Text("$curr / $nbrFiles");
+      $win->pb->StepIt();
     }
+    
+    close($fhReport);
+    return($reportFilename, $nbrError);
   }
-
-}  #--- End listFilesReport
+  
+}  #--- End writeListFilesReportTXT
 
 #--------------------------#
 sub listExtReport
@@ -3614,7 +4788,7 @@ sub copyMove
     my $optCopyTree  = $win->chCopyTree->Checked();
     my $optDuplicate = $win->chCopyRemDouble->Checked();
     my $selFunctCopy = $win->rbCopy->Checked();
-    my $dir          = $win->tfInputDir->Text();
+    my $dir          = $win->tfInput->Text();
     my $nbrCopyMove  = 0;
     my $count        = 0;
     my $srcDriveLetter;
@@ -3848,7 +5022,7 @@ sub copyMove
       if ($logging) {
         close($fhLog);
         if ($nbrCopyMove or $nbrError) { # If copied/moved files or errors, open the log ?
-          $endMsg .= "\n$STR{'EndLogging'}";
+          $endMsg .= "\n$STR{'OpenLog'} ?";
           my $answer = Win32::GUI::MessageBox($win, $endMsg, "XL-FileTools $VERSION", 0x40024);
           # Open the log
           if ($answer == 6) { $win->ShellExecute('open', $logFile,'','',1); }
@@ -3889,7 +5063,7 @@ sub renameFiles
   if ($dirReport) {
     # Local variales
     my $nbrFiles   = scalar(keys %{$refListFiles});
-    my $dir        = $win->tfInputDir->Text();
+    my $dir        = $win->tfInput->Text();
     my $nbrRenamed = 0;
     my $refResListFiles;
     my $refListSubFolders;
@@ -3927,7 +5101,7 @@ sub renameFiles
       if ($logging) {
         close($fhLog);
         if ($nbrRenamed or $nbrError) { # If renamed files or errors, open the log ?
-          $endMsg .= "\n$STR{'EndLogging'}";
+          $endMsg .= "\n$STR{'OpenLog'} ?";
           my $answer = Win32::GUI::MessageBox($win, $endMsg, "XL-FileTools $VERSION", 0x40024);
           # Open the log
           if ($answer == 6) { $win->ShellExecute('open', $logFile,'','',1); }
@@ -3986,7 +5160,9 @@ sub renameByHash
       if (!$win->cbRenByHash->SelectedItem()) {
         if ($execute) { $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');   }
         else          { $winPb->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...'); }
-        if (my $digestMD5 = file_md5_hex($file)) { # MD5
+        
+        # MD5
+        if (my $digestMD5 = file_md5_hex($file)) {
           if ($CONFIG{'HASH_LOWERCASE'}) { $digestMD5 = lc($digestMD5); }
           else                           { $digestMD5 = uc($digestMD5); }
           my $dstFilename = "$dstPath\\$digestMD5";
@@ -4017,53 +5193,113 @@ sub renameByHash
           $nbrError++;
           if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingMD5'} $file\n"; }
         }
-      } elsif ($win->cbRenByHash->SelectedItem()) { # SHA1
+        
+      # SHA1
+      } elsif ($win->cbRenByHash->SelectedItem() == 1) {
         if ($execute) { $win->lblPbCurr->Text($STR{'HashingSHA1'}.': '.$file.'...'); }
         else          { $winPb->lblPbCurr->Text($STR{'HashingSHA1'}.': '.$file.'...'); }
-        if (open(my $fh, $file)) {
-          if (my $sha1 = Digest::SHA1->new()) {
-            $sha1->addfile($fh);
-            close($fh);
-            if ($sha1->hexdigest) {
-              my $digestSHA1;
-              if ($CONFIG{'HASH_LOWERCASE'}) { $digestSHA1 = lc($sha1->hexdigest); }
-              else                           { $digestSHA1 = uc($sha1->hexdigest); }
-              my $dstFilename = "$dstPath\\$digestSHA1";
+        if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
+          if ($CONFIG{'HASH_LOWERCASE'}) { $digestSHA1 = lc($digestSHA1); }
+          else                           { $digestSHA1 = uc($digestSHA1); }
+          my $dstFilename = "$dstPath\\$digestSHA1";
+          if ($extension) { $dstFilename .= '.'.$extension; } # Add extension
+          # File already exists
+          if (-e $dstFilename or exists($resListFiles{$dstFilename})) {
+            my $i;
+            while (-e $dstFilename or exists($resListFiles{$dstFilename})) {
+              $i++;
+              $dstFilename = "$dstPath\\$digestSHA1".'_'.$i;
               if ($extension) { $dstFilename .= '.'.$extension; } # Add extension
-              # File already exists
-              if (-e $dstFilename or exists($resListFiles{$dstFilename})) {
-                my $i;
-                while (-e $dstFilename or exists($resListFiles{$dstFilename})) {
-                  $i++;
-                  $dstFilename = "$dstPath\\$digestSHA1".'_'.$i;
-                  if ($extension) { $dstFilename .= '.'.$extension; } # Add extension
-                }
-                $renamed = 1;
-              }
-              # Rename
-              if ($execute) {
-                if (rename($file, $dstFilename)) {
-                  $nbrRenamed++;
-                  if ($logging) { print $fhLog "$STR{'Renamed'} $file -> $dstFilename\n"; }
-                } else {
-                  $nbrError++;
-                  if ($logging) {  print $fhLog "$STR{'Error'} $STR{'lblFunctions3T'} $file\n"; }
-                }
-              }
-              elsif ($renamed) { $resListFiles{$dstFilename} = 4; } # Renamed file existed, renamed
-              else             { $resListFiles{$dstFilename} = 1; }
-            } elsif ($execute) {
-              $nbrError++;
-              if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA1'} $file\n"; }
             }
-          } elsif ($execute) {
-            $nbrError++;
-            if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA1'} $file\n"; }
+            $renamed = 1;
           }
-          close($fh);
+          # Rename
+          if ($execute) {
+            if (rename($file, $dstFilename)) {
+              $nbrRenamed++;
+              if ($logging) { print $fhLog "$STR{'Renamed'} $file -> $dstFilename\n"; }
+            } else {
+              $nbrError++;
+              if ($logging) {  print $fhLog "$STR{'Error'} $STR{'lblFunctions3T'} $file\n"; }
+            }
+          }
+          elsif ($renamed) { $resListFiles{$dstFilename} = 4; } # Renamed file existed, renamed
+          else             { $resListFiles{$dstFilename} = 1; }
         } elsif ($execute) {
           $nbrError++;
           if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA1'} $file\n"; }
+        }
+        
+      # SHA256
+      } elsif ($win->cbRenByHash->SelectedItem() == 2) {
+        if ($execute) { $win->lblPbCurr->Text($STR{'HashingSHA256'}.': '.$file.'...'); }
+        else          { $winPb->lblPbCurr->Text($STR{'HashingSHA256'}.': '.$file.'...'); }
+        if (my $digestSHA256 = Digest::SHA->new(256)->addfile($file,"b")->hexdigest) {
+          if ($CONFIG{'HASH_LOWERCASE'}) { $digestSHA256 = lc($digestSHA256); }
+          else                           { $digestSHA256 = uc($digestSHA256); }
+          my $dstFilename = "$dstPath\\$digestSHA256";
+          if ($extension) { $dstFilename .= '.'.$extension; } # Add extension
+          # File already exists
+          if (-e $dstFilename or exists($resListFiles{$dstFilename})) {
+            my $i;
+            while (-e $dstFilename or exists($resListFiles{$dstFilename})) {
+              $i++;
+              $dstFilename = "$dstPath\\$digestSHA256".'_'.$i;
+              if ($extension) { $dstFilename .= '.'.$extension; } # Add extension
+            }
+            $renamed = 1;
+          }
+          # Rename
+          if ($execute) {
+            if (rename($file, $dstFilename)) {
+              $nbrRenamed++;
+              if ($logging) { print $fhLog "$STR{'Renamed'} $file -> $dstFilename\n"; }
+            } else {
+              $nbrError++;
+              if ($logging) {  print $fhLog "$STR{'Error'} $STR{'lblFunctions3T'} $file\n"; }
+            }
+          }
+          elsif ($renamed) { $resListFiles{$dstFilename} = 4; } # Renamed file existed, renamed
+          else             { $resListFiles{$dstFilename} = 1; }
+        } elsif ($execute) {
+          $nbrError++;
+          if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA256'} $file\n"; }
+        }
+        
+      # SHA512
+      } elsif ($win->cbRenByHash->SelectedItem() == 3) {
+        if ($execute) { $win->lblPbCurr->Text($STR{'HashingSHA512'}.': '.$file.'...'); }
+        else          { $winPb->lblPbCurr->Text($STR{'HashingSHA512'}.': '.$file.'...'); }
+        if (my $digestSHA512 = Digest::SHA->new(512)->addfile($file,"b")->hexdigest) {
+          if ($CONFIG{'HASH_LOWERCASE'}) { $digestSHA512 = lc($digestSHA512); }
+          else                           { $digestSHA512 = uc($digestSHA512); }
+          my $dstFilename = "$dstPath\\$digestSHA512";
+          if ($extension) { $dstFilename .= '.'.$extension; } # Add extension
+          # File already exists
+          if (-e $dstFilename or exists($resListFiles{$dstFilename})) {
+            my $i;
+            while (-e $dstFilename or exists($resListFiles{$dstFilename})) {
+              $i++;
+              $dstFilename = "$dstPath\\$digestSHA512".'_'.$i;
+              if ($extension) { $dstFilename .= '.'.$extension; } # Add extension
+            }
+            $renamed = 1;
+          }
+          # Rename
+          if ($execute) {
+            if (rename($file, $dstFilename)) {
+              $nbrRenamed++;
+              if ($logging) { print $fhLog "$STR{'Renamed'} $file -> $dstFilename\n"; }
+            } else {
+              $nbrError++;
+              if ($logging) {  print $fhLog "$STR{'Error'} $STR{'lblFunctions3T'} $file\n"; }
+            }
+          }
+          elsif ($renamed) { $resListFiles{$dstFilename} = 4; } # Renamed file existed, renamed
+          else             { $resListFiles{$dstFilename} = 1; }
+        } elsif ($execute) {
+          $nbrError++;
+          if ($logging) { print $fhLog "$STR{'Error'} $STR{'HashingSHA512'} $file\n"; }
         }
       }
     }
@@ -4229,10 +5465,10 @@ sub renameReplaceBy
   elsif ($dstExpr =~ /\$1/ and !$dstExprEval) { $dstExpr = '"' . $dstExpr . '"'; }
   
   # Base dir
-  my $dir = $win->tfInputDir->Text();
+  my $dir = $win->tfInput->Text();
   my $inputIsNotDir = 0;
-  if (!$dir) { # Input is not a dir
-    my $filesStr = $win->tfInputFiles->Text();
+  if (!-d $dir) { # Input is not a dir
+    my $filesStr = $dir;
     if ($filesStr) {
       $inputIsNotDir = 1;
       # Multiple files
@@ -4435,39 +5671,25 @@ sub isProcessReady
   # Local variables
   my $confirm = shift;
   my $nextStep;
+  my $input = $win->tfInput->Text();
   
   # Check Input
-  if (!$win->tfInputDir->Text() and !$win->tfInputFiles->Text()) {
+  if (!$win->tfInput->Text()) {
     $nextStep = $STR{'selectInput'};
+    $win->btnPreview->Disable();
   } else {
-    
-    # Filters
-
-    # File Size
-    if ($win->rbFiltersSize->Checked() and !$win->tfFiltersSize->Text()) {
-      $nextStep = $STR{'setFileSize'};
+    my $dir;
+    if ($input =~ /" "/) { $input =~ s/"//g; $dir = (split(/ /, $input))[0]; }
+    else { $dir = $input; }
+    if (-d $dir or -e $dir) { $win->btnPreview->Enable(); }
+    else {
+      $nextStep = $STR{'selectInput'};
       $win->btnPreview->Disable();
-    # Contains
-    } elsif ($win->rbFiltersContains->Checked() and !$win->tfFiltersContains->Text()) {
-      $nextStep = $STR{'setContains'};
-      $win->btnPreview->Disable();
-    } elsif ($win->chFiltersContainsRegex->Checked() and $win->rbFiltersContains->Checked()) {
-      my ($status, $msg) = &validRegex($win->tfFiltersContains->Text());
-      if ($status) {
-        $nextStep = $STR{'errRegex'} . ' ' . $STR{'errRegexFilter'} . ":\n\n";
-        if ($msg) { $nextStep .= $msg; }
-        $win->btnPreview->Disable();
-      } else {
-        $win->btnPreview->Enable();
-        # Functions
-        $nextStep = &isFunctionsReady();
-      }
-    } else {
-      $win->btnPreview->Enable();
-      # Functions
-      $nextStep = &isFunctionsReady();
     }
   }
+  
+  # Is Function Ready ?
+  if (!$nextStep) { $nextStep = &isFunctionsReady(); }
 
   # Return an error message or enable the button
   if ($nextStep) {
@@ -4485,21 +5707,18 @@ sub isProcessReady
 sub isFunctionsReady
 #--------------------------#
 {
-  # Local variables
-  my $nextStep;
-  
   # Lists
-  if (!$win->TabFunctions->SelectedItem() and  $win->rbListFiles->Checked()     and
-      !$win->chListFilesOpt1->Checked()   and !$win->chListFilesOpt2->Checked() and
-      !$win->chListFilesOpt3->Checked()   and !$win->chListFilesOpt4->Checked() and
-      !$win->chListFilesOpt5->Checked()   and !$win->chListFilesOpt6->Checked()) {
-    $nextStep = $STR{'setListFilesOpt'};
+  if (!$win->TabFunctions->SelectedItem()         and  $win->rbListFiles->Checked()      and
+      !$win->chListFilesOptFP->Checked()          and !$win->chListFilesOptFN->Checked() and
+      !$win->chListFilesOptHV->Checked()          and !$win->chListFilesOptFD->Checked() and
+      !$win->chListFilesOptNbrL->Checked()) {
+    return($STR{'setListFilesOpt'});
   } elsif ($win->rbListFiles->Checked() and !-d $win->tfReportDir->Text()) {
-    $nextStep = $STR{'selectReportDir'};
+    return($STR{'selectReportDir'});
   }
   # Copy or move
   if ($win->TabFunctions->SelectedItem() == 1 and !$win->tfDestinationDir->Text()) {
-    $nextStep = $STR{'selectDstDir'};
+    return($STR{'selectDstDir'});
   }
   # Rename By Sort
   if ($win->TabFunctions->SelectedItem() == 2 and $win->rbRenSort->Checked()) {
@@ -4507,12 +5726,12 @@ sub isFunctionsReady
     my $initVal     = $winRenBySortOpt->tfInitVal->Text();
     my $stepVal     = $winRenBySortOpt->tfStepVal->Text();
     if (!$length and !$initVal and !$stepVal) {
-      $nextStep = $STR{'setRenReplaceBy'};
+      return($STR{'setRenReplaceBy'});
     }
   }
   # Rename Replace
   if ($win->TabFunctions->SelectedItem() == 2 and $win->rbRenReplace->Checked() and !$win->tfRenReplace->Text()) {
-    $nextStep = $STR{'setRenBySortOpt'};
+    return($STR{'setRenBySortOpt'});
   } elsif ($win->TabFunctions->SelectedItem() == 2 and $win->rbRenReplace->Checked() and
            ($win->chRenReplaceRegex->Checked() or $win->chRenReplaceByEval->Checked())) { # Valid regex
     # Regex is valid ?
@@ -4520,22 +5739,22 @@ sub isFunctionsReady
       if ($win->tfRenReplace->Text()) {
         my ($status, $msg) = &validRegex($win->tfRenReplace->Text());
         if ($status and $status == 1) {
-          $nextStep = $STR{'errRegex'} . ' ' . $STR{'errRegexReplace'} . ":\n\n";
-          if ($msg) { $nextStep .= $msg; }
+          my $errorMsg = $STR{'errRegex'} . ' ' . $STR{'errRegexReplace'} . ":\n\n";
+          if ($msg) { $errorMsg .= $msg; }
+          return($errorMsg);
         }
       }
       # Replacement expression is valid ?
       if ($win->tfRenReplaceBy->Text()) {
         my ($status, $msg) = &validReplacement;
         if ($status and $status == 1) {
-          $nextStep = $STR{'errBy'} . ' ' . $STR{'errRegexReplaceBy'} . ":\n\n";
-          if ($msg) { $nextStep .= $msg; }
+          my $errorMsg = $STR{'errBy'} . ' ' . $STR{'errRegexReplaceBy'} . ":\n\n";
+          if ($msg) { $errorMsg .= $msg; }
+          return($errorMsg);
         }
       }
     }
   }
-  
-  return($nextStep);
   
 }  #--- End isFunctionsReady
   
@@ -4627,6 +5846,7 @@ sub configTab_Click
     $winConfig->chHashLowercase->Show();
     # Hide logging tab
     $winConfig->chEnableLogging->Hide();
+    $winConfig->btnOpenLog->Hide();
     $winConfig->rbUseDefaultDir->Hide();
     $winConfig->rbLoggingDir->Hide();
     $winConfig->tfLoggingDir->Hide();
@@ -4636,6 +5856,7 @@ sub configTab_Click
   # Show Logging tab
   } else {
     $winConfig->chEnableLogging->Show();
+    $winConfig->btnOpenLog->Show();
     # Show options
     $winConfig->rbUseDefaultDir->Show();
     $winConfig->rbLoggingDir->Show();
@@ -4795,6 +6016,26 @@ sub chEnableLogging_Click
   }
 
 }  #--- End chEnableLogging_Click
+
+#--------------------------#
+sub btnOpenLog_Click
+#--------------------------#
+{
+  # Local variables
+  my $logFile;
+  if ($winConfig->chEnableLogging->Checked()) {
+    if ($winConfig->rbLoggingDir->Checked() and -d $winConfig->tfLoggingDir->Text()) {
+      $logFile = $winConfig->tfLoggingDir->Text();
+    } else { $logFile = $USERDIR; }
+    $logFile .= "\\XL-FileTools.log";
+  }
+  
+  # Open file with default program
+  if ($logFile and -T $logFile) {
+    $win->ShellExecute('open', $logFile,'','',1) or Win32::GUI::MessageBox($win, "$STR{'errorOpening'}: ".Win32::FormatMessage(Win32::GetLastError()), $STR{'error'}, 0x40010);
+  }
+
+}  #--- End btnOpenLog_Click
 
 #--------------------------#
 sub rbUseDefaultDir_Click
@@ -5014,6 +6255,8 @@ sub loadConfig
   if (exists($$refConfig{'DIR_REPORT'}) and
       -d $$refConfig{'DIR_REPORT'})                 { $win->tfReportDir->Text($$refConfig{'DIR_REPORT'});                           }
   else                                              { $win->tfReportDir->Text($USERDIR);                                            } # Default dir
+  if (exists($$refConfig{'FORMAT_REPORT'}))         { $win->cbReportFormat->SetCurSel($$refConfig{'FORMAT_REPORT'});                }
+  else                                              { $win->cbReportFormat->SetCurSel(0);                                           } # Default is TXT
   if (exists($$refConfig{'AUTO_OPEN_REPORT'}))      { $win->chOpenReport->Checked($$refConfig{'AUTO_OPEN_REPORT'});                 }
   else                                              { $win->chOpenReport->Checked(1);                                               } # Default is checked
 

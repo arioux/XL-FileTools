@@ -6378,11 +6378,66 @@ Y83c+/7+////////////////////////////////////////sufubtfkq/X8bNbksufu////////
 ////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////
 ) );
+  
+  my $filterSet = Win32::GUI::BitmapInline->new( q(
+Qk02AwAAAAAAADYAAAAoAAAAEAAAABAAAAABABgAAAAAAAADAADEDgAAxA4AAAAAAAAAAAAA////
+////+vr64eHhzc3NzMzMfX19fHx8sbGxzMzMzMzM3d3d9/f3/////////////////////Pz88PDw
+5ubm5eXlh4eH0cLChoaG5eXl5eXl7u7u+/v7////////////////////////////////////jo6O
+xLW1iYmJ////////////////////////////////////////////////////i4uLxLW1hYWF////
+////////////////////////////////////////////////hYWFxLW1fn5+////////////////
+////////////////////////////////////hISExLW1fHx8////////////////////////////
+////////////////////////hISExLW1fHx8////////////////////////////////////////
+////////2dnZhISExLW1fHx81NTU////////////////////////////////////////29vblZWV
+x8bGr6SkxLKyhoaG2dnZ////////////////////////////////3NzcmZmZy8vLwcDArqGhvqys
+2MfHk5OT3t7e////////////////////////4eHhnJyc0dHRw8PDu7q6rJ6euKamzry8383NoaGh
+4uLi////////////////////q6ur4uLiz8/Pvb29t7W1q5yctKKix7W13MrK69rara2t////////
+////////ubm5q6urwcHBtLS0qampnZyckYqKl46OpZyctq2txby8ra2tt7e3////////////ubm5
+6urq5ubm3t7e1dXVzsrKxLW1ybi41sTE5NLS8N/f+ejot7e3////////////ysrKq6urnJycmZmZ
+lZWVhISEd3d3fHx8hoaGk5OToaGhra2tyMjI////////////////////////////////////////
+////////////////////////////////
+) );
+  
+  my $filterAdd = Win32::GUI::BitmapInline->new( q(
+Qk02AwAAAAAAADYAAAAoAAAAEAAAABAAAAABABgAAAAAAAADAADEDgAAxA4AAAAAAAAAAAAA////
++vr64eHhzc3NzMzMfX19fHx8sbGxzMzMzMzM3d3dZJNhN4czaqdm/////////////Pz88PDw5ubm
+5eXlh4eH0cLChoaG5eXl5eXl7u7uPJsyK98aPZwz////////////////////////////jo6OxLW1
+iYmJ////brtmPqMzPqMzPeIsPqMzPqMzbrtm////////////////////i4uLxLW1hYWF////QKoz
+UudBUudBUudBUudBUudBQKoz////////////////////hYWFxLW1fn5+////ccRmQbEzQbEzZutV
+QbEzQbEzccRm////////////////////hISExLW1fHx8////////////Q7Yzde5kQ7Yz////////
+////////////////////hISExLW1fHx8////////////c8tmRLozc8tm////////////////////
+////2dnZhISExLW1fHx81NTU////////////////////////////////////////29vblZWVx8bG
+r6SkxLKyhoaG2dnZ////////////////////////////////3NzcmZmZy8vLwcDArqGhvqys2MfH
+k5OT3t7e////////////////////////4eHhnJyc0dHRw8PDu7q6rJ6euKamzry8383NoaGh4uLi
+////////////////////q6ur4uLiz8/Pvb29t7W1q5yctKKix7W13MrK69rara2t////////////
+////ubm5q6urwcHBtLS0qampnZyckYqKl46OpZyctq2txby8ra2tt7e3////////////ubm56urq
+5ubm3t7e1dXVzsrKxLW1ybi41sTE5NLS8N/f+ejot7e3////////////ysrKq6urnJycmZmZlZWV
+hISEd3d3fHx8hoaGk5OToaGhra2tyMjI////////////////////////////////////////////
+////////////////////////////////
+) );
+
+
+  my $filterDel = Win32::GUI::BitmapInline->new( q(
+Qk02AwAAAAAAADYAAAAoAAAAEAAAABAAAAABABgAAAAAAAADAADEDgAAxA4AAAAAAAAAAAAA////
++vr64eHhzc3NzMzMfX19fHx8sbGxzMzMzMzM3d3d9/f3/////////////////////Pz88PDw5ubm
+5eXlh4eH0cLChoaG5eXl5eXl7u7u+/v7////////////////////////////////////jo6OxLW1
+iYmJ////Zma1MzOZMzOZMzOZMzOZMzOZZma1////////////////////i4uLxLW1hYWF////MzOt
+Xl73Xl73Xl73Xl73Xl73MzOt////////////////////hYWFxLW1fn5+////ZmbKMzO5MzO5MzO5
+MzO5MzO5ZmbK////////////////////hISExLW1fHx8////////////////////////////////
+////////////////////hISExLW1fHx8////////////////////////////////////////////
+////2dnZhISExLW1fHx81NTU////////////////////////////////////////29vblZWVx8bG
+r6SkxLKyhoaG2dnZ////////////////////////////////3NzcmZmZy8vLwcDArqGhvqys2MfH
+k5OT3t7e////////////////////////4eHhnJyc0dHRw8PDu7q6rJ6euKamzry8383NoaGh4uLi
+////////////////////q6ur4uLiz8/Pvb29t7W1q5yctKKix7W13MrK69rara2t////////////
+////ubm5q6urwcHBtLS0qampnZyckYqKl46OpZyctq2txby8ra2tt7e3////////////ubm56urq
+5ubm3t7e1dXVzsrKxLW1ybi41sTE5NLS8N/f+ejot7e3////////////ysrKq6urnJycmZmZlZWV
+hISEd3d3fHx8hoaGk5OToaGhra2tyMjI////////////////////////////////////////////
+////////////////////////////////
+) );
 
   return($winICO, $logoBmp, $logo128Bmp, $openDirBmp, $openFileBmp, $processBmp,
          $stopBmp, $previewBmp, $config32Bmp, $helpBmp, $aboutBmp, $config128Bmp,
          $browseBmp, $folderClosedBmp, $folderOpenedBmp, $fileBmp, $delFileBmp,
-         $warnFileBmp);
+         $warnFileBmp, $filterSet, $filterAdd, $filterDel);
 }
 
 #------------------------------------------------------------------------------#

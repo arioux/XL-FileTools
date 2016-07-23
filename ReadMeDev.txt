@@ -25,12 +25,13 @@ following modules installed:
 - File-Copy-Recursive (v0.38)
 - Time-Local (v1.2300)
 - Text-Roman (v3.5)
+- Excel-Writer-XLSX (v0.83)
 
 
 To do
 -----
 
-- Add multiple filter support for file details (size, last access, last modify)
+Nothing for now.
 
 
 

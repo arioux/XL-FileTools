@@ -96,6 +96,8 @@ sub loadDefaultStr
   $$refSTR{'Moving'}             = 'moving';
   $$refSTR{'HashingMD5'}         = 'Calculating MD5 for';
   $$refSTR{'HashingSHA1'}        = 'Calculating SHA1 for';
+  $$refSTR{'HashingSHA256'}      = 'Calculating SHA256 for';
+  $$refSTR{'HashingSHA512'}      = 'Calculating SHA512 for';
   $$refSTR{'NumberLines'}        = 'Calculating number of lines for';
   $$refSTR{'ListingExtensions'}  = 'Listing extension';
   $$refSTR{'WritingReport'}      = 'Writing report';
@@ -115,39 +117,36 @@ sub loadDefaultStr
   $$refSTR{'RenameFiles'}        = 'Rename files';
   $$refSTR{'cancel'}             = 'Cancel';
   $$refSTR{'EndErrors'}          = 'error(s)';
-  $$refSTR{'EndLogging'}         = 'Open the log ?';
   $$refSTR{'errDoc'}             = 'Documentation.chm have not been found in the program folder.';
   
   # Main Window
-  $$refSTR{'lblInputT'}          = 'Input';
-  $$refSTR{'rbInputDir'}         = 'Dir';
-  $$refSTR{'chInputDirRecurse'}  = 'Subfolders';
-  $$refSTR{'rbInputFiles'}       = 'File(s)';
-  $$refSTR{'lblFiltersT'}        = 'Filters';
-  $$refSTR{'rbFiltersNone'}      = 'None';
-  $$refSTR{'rbFiltersDirOnly'}   = 'Only folders';
-  $$refSTR{'rbFiltersSize'}      = 'File size';
-  $$refSTR{'rbFiltersContains'}  = 'Contains';
-  $$refSTR{'chFiltersContainsCase'}     = 'Match case';
-  $$refSTR{'chFiltersContainsRegex'}    = 'Regex';
-  $$refSTR{'chFiltersContainsFileOnly'} = 'Filename only';
-  $$refSTR{'rbFiltersLastAccess'} = 'Last accessed';
-  $$refSTR{'rbFiltersLastModif'}  = 'Last modified';
+  $$refSTR{'lblInputT'}           = 'Input';
+  $$refSTR{'rbInputDir'}          = 'Folder';
+  $$refSTR{'chInputDirRecurse'}   = 'Subfolders';
+  $$refSTR{'rbInputFiles'}        = 'File(s)';
+  $$refSTR{'lblFiltersT'}         = 'Filters';
+  $$refSTR{'filterSetTip'}        = 'Set filter';
+  $$refSTR{'filterAddTip'}        = 'Add filter';
+  $$refSTR{'filterDelTip'}        = 'Del filter';
   $$refSTR{'lblFunctionsT'}       = 'Functions';
   $$refSTR{'lblFunctions1T'}      = 'List';
   $$refSTR{'lblFunctions2T'}      = 'Copy or move';
   $$refSTR{'lblFunctions3T'}      = 'Rename';
   $$refSTR{'rbListExt'}           = 'List extensions';
   $$refSTR{'rbListFiles'}         = 'List files, include';
-  $$refSTR{'chListFilesOpt1'}     = 'Full path';
-  $$refSTR{'chListFilesOpt2'}     = 'Filename';
-  $$refSTR{'chListFilesOpt3'}     = 'MD5';
-  $$refSTR{'chListFilesOpt4'}     = 'SHA1';
-  $$refSTR{'chListFilesOpt5'}     = 'File details';
-  $$refSTR{'chListFilesOpt6'}     = 'Number of lines';
-  $$refSTR{'chListFilesOpt7'}     = 'No header';
-  $$refSTR{'chListFilesOpt8'}     = 'No folder';
+  $$refSTR{'chListFilesOptFP'}    = 'Full path';
+  $$refSTR{'chListFilesOptFN'}    = 'Filename';
+  $$refSTR{'chListFilesOptHV'}    = 'Hash values';
+  $$refSTR{'chListFilesHV1'}      = 'MD5';
+  $$refSTR{'chListFilesHV2'}      = 'SHA1';
+  $$refSTR{'chListFilesHV3'}      = 'SHA256';
+  $$refSTR{'chListFilesHV4'}      = 'SHA512';
+  $$refSTR{'chListFilesOptFD'}    = 'File details';
+  $$refSTR{'chListFilesOptNbrL'}  = 'Number of lines';
+  $$refSTR{'chListFilesOptNH'}    = 'No header';
+  $$refSTR{'chListFilesOptNF'}    = 'No folder';
   $$refSTR{'lblReportDir'}        = 'Report';
+  $$refSTR{'browseDirReport'}     = 'Browse report folder in Explorer';
   $$refSTR{'chOpenReport'}        = 'Open report when finished';
   $$refSTR{'chSaveOpenDir'}       = 'Remember this dir';
   $$refSTR{'rbCopy'}              = 'Copy';
@@ -166,14 +165,13 @@ sub loadDefaultStr
   $$refSTR{'notReady'}            = 'Not ready';
   $$refSTR{'nextStep'}            = 'Next step';
   $$refSTR{'selectInput'}         = 'You must select a dir or a list of files as input.';
-  $$refSTR{'setFileSize'}         = 'You must enter a file size for this filter.';
-  $$refSTR{'setContains'}         = 'You must enter a keyword or regex for this filter.';
   $$refSTR{'errRegex'}            = 'You must enter a valid regex.';
   $$refSTR{'errBy'}               = 'You must enter a valid replacement expression.';
   $$refSTR{'errRegexFilter'}      = 'Current error in * Filter *';
   $$refSTR{'errRegexReplace'}     = 'Current error in * Replace *';
   $$refSTR{'errRegexReplaceBy'}   = 'Current error in * By *';
   $$refSTR{'setListFilesOpt'}     = 'You must select at least one item to include with the selected function.';
+  $$refSTR{'selectReportDir'}     = 'You must select a folder for report.';
   $$refSTR{'selectDstDir'}        = 'You must select a destination folder.';
   $$refSTR{'setRenBySortOpt'}     = 'You must set options for the selected function.';
   $$refSTR{'setRenReplaceBy'}     = 'You must enter an expression in the replace textfield.';
@@ -182,6 +180,28 @@ sub loadDefaultStr
   $$refSTR{'StopProcess'}         = 'Stop process';
   $$refSTR{'Configuration'}       = 'Open Settings Window';
   $$refSTR{'btnHelpTip'}          = 'See Documentation';
+  
+  # Filters Window
+  $$refSTR{'Operator'}            = 'Operator';
+  $$refSTR{'OR'}                  = 'OR';
+  $$refSTR{'AND'}                 = 'AND';
+  $$refSTR{'Type'}                = 'Type';
+  $$refSTR{'TypeOp'}              = 'Type Operator';
+  $$refSTR{'flags'}               = 'Flags';
+  $$refSTR{'searchStr'}           = 'Search';
+  $$refSTR{'rbFiltersDirOnly'}    = 'Only folders';
+  $$refSTR{'rbFiltersSize'}       = 'File size';
+  $$refSTR{'rbFiltersContains'}   = 'Contains';
+  $$refSTR{'chFiltersContainsCase'}     = 'Match case';
+  $$refSTR{'chFiltersContainsRegex'}    = 'Regex';
+  $$refSTR{'chFiltersContainsFileOnly'} = 'Filename only';
+  $$refSTR{'rbFiltersLastAccess'} = 'Last accessed';
+  $$refSTR{'rbFiltersLastModif'}  = 'Last modified';
+  $$refSTR{'setContains'}         = 'You must enter a keyword or regex for this filter.';
+  $$refSTR{'errRegex'}            = 'You must enter a valid regex.';
+  $$refSTR{'setFileSize'}         = 'You must enter a valid file size for this filter.';
+  $$refSTR{'setDate'}             = 'You must enter dates with valid format for this filter.';
+  $$refSTR{'SetAddFilter'}        = 'Set or Add';
   
   # Config Window
   $$refSTR{'winConfig'}       = 'Settings';
@@ -201,6 +221,7 @@ sub loadDefaultStr
   # Logging tab
   $$refSTR{'logging'}         = 'Logging';
   $$refSTR{'chEnableLogging'} = 'Enable logging';
+  $$refSTR{'OpenLog'}         = 'Open the log';
   $$refSTR{'rbUseDefaultDir'} = 'Use default folder';
   $$refSTR{'chUseDestDirCM'}  = 'For copy or move, use destination folder';
   $$refSTR{'rbLoggingDir'}    = 'Use this folder';
