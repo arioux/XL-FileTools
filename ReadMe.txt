@@ -64,6 +64,6 @@ The folder opened and folder closed in Preview window come from Silk Icons
 by FamFamFam (http://famfamfam.com/lab/icons/silk) and are distributed on 
 term of the CC Attribution 4.0 License.
 
-The file, warning and error icons used in Preview window come from Fugue 
-Icons by Yusuke Kamiyamane (http://p.yusukekamiyamane.com) and are distributed 
-on term of the CC Attribution 4.0 License.
+The filter icons (use, delete, add), the file, warning and error icons used in 
+Preview window come from Fugue Icons by Yusuke Kamiyamane (http://p.yusukekamiyamane.com) 
+and are distributed on term of the CC Attribution 4.0 License.
