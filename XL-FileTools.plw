@@ -7,8 +7,8 @@
 # Description : Part of the XL-Toolkit, XL-FileTools provides a bunch of functions
 #               for files like filtering, listing, copying, moving and renaming.
 # Creation    : 2016-05-14
-# Modified    : 2016-07-22
-my $VERSION   = "3.0";
+# Modified    : 2016-07-28
+my $VERSION   = "3.1";
 # Author      : Alain Rioux (admin@le-tools.com)
 #
 # Copyright (C) 2016  Alain Rioux (le-tools.com)
@@ -200,7 +200,6 @@ $win->AddCheckbox(    -name        => 'chInputDirRecurse'     ,
                       -font        => $font10                 ,
                       -tabstop     => 1                       ,
                       -checked     => 1                       , );
-
 $win->AddTextfield(   -name        => 'tfInput'               ,
                       -size        => [465, 22]               ,
                       -pos         => [  5,115]               ,
@@ -1405,7 +1404,7 @@ $winPb->AddButton(      -name        => 'btnCancel'      ,
 if (-T $CONFIG_FILE) {
   &loadConfig(\%CONFIG);
   
-  if ($CONFIG{'TOOL_AUTO_UPDATE'}) { $THR_UPDATE = threads->create(sub { &updateTool(0); }); }
+  if ($CONFIG{'TOOL_AUTO_UPDATE'}) { $THR_UPDATE = threads->create(sub { sleep(1); &updateTool(0); }); }
   
   # Set input (objects sent)
   if ($$REF_ARG[0]) {
@@ -1434,14 +1433,14 @@ if (-T $CONFIG_FILE) {
       &rbInputFiles_Click();
     }
   }
-  
-  # Set Filter grid header
-  $win->gridFilter->SetCellText(0, 0, $STR{'Operator'} );
-  $win->gridFilter->SetCellText(0, 1, $STR{'Type'}     );
-  $win->gridFilter->SetCellText(0, 2, $STR{'TypeOp'}   );
-  $win->gridFilter->SetCellText(0, 3, $STR{'flags'}    );
-  $win->gridFilter->SetCellText(0, 4, $STR{'searchStr'});
 }
+
+# Set Filter grid header
+$win->gridFilter->SetCellText(0, 0, $STR{'Operator'} );
+$win->gridFilter->SetCellText(0, 1, $STR{'Type'}     );
+$win->gridFilter->SetCellText(0, 2, $STR{'TypeOp'}   );
+$win->gridFilter->SetCellText(0, 3, $STR{'flags'}    );
+$win->gridFilter->SetCellText(0, 4, $STR{'searchStr'});
 
 $START = 1;
 $win->Show();
