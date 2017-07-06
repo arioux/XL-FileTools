@@ -5,7 +5,6 @@ Author 				: Alain Rioux (admin@le-tools.com)
 WebSite				: http://le-tools.com/XL-FileTools.html
 GitHub				: https://github.com/arioux/XL-FileTools
 Documentation	: http://le-tools.com/XL-FileToolsDoc.html
-FossHub      	: http://code.fosshub.com/XL-FileTools
 
 
 Development
@@ -22,6 +21,7 @@ following modules installed:
 - threads-shared (v1.46)
 - Digest-MD5-File (v0.08)
 - Digest-SHA1 (v2.13)
+- Encode (v2.56)
 - File-Copy-Recursive (v0.38)
 - Time-Local (v1.2300)
 - Text-Roman (v3.5)
@@ -30,9 +30,6 @@ following modules installed:
 
 To do
 -----
-
-Nothing for now.
-
 
 
 Packaging

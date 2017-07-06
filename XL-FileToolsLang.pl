@@ -5,10 +5,10 @@
 # Website             : http://le-tools.com/
 # GitHub		          : https://github.com/arioux/XL-FileTools
 # Creation            : 2016-05-15
-# Modified            : 2016-05-15
+# Modified            : 2017-07-04
 # Author              : Alain Rioux (admin@le-tools.com)
 #
-# Copyright (C) 2016  Alain Rioux (le-tools.com)
+# Copyright (C) 2016-2017  Alain Rioux (le-tools.com)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,7 +28,6 @@
 #------------------------------------------------------------------------------#
 # Modules
 #------------------------------------------------------------------------------#
-
 use strict;
 use warnings;
 
@@ -38,19 +37,17 @@ sub loadStr
 {
   # Local variables
   my ($refSTR, $LANG_FILE) = @_;
-  
   # Open and load string values
   open(LANG, "<:encoding(UTF-8)", $LANG_FILE);
   my @tab = <LANG>;
   close(LANG);
-  
   # Store values  
   foreach (@tab) {
     chomp($_);
     s/[^\w\=\s\.\!\,\-\)\(\']//g;
     my ($key, $value) = split(/ = /, $_);
-    $value = encode("iso-8859-1", $value); # Revaluate with different language encoding
-    if ($key) { $$refSTR{$key}  = $value; }
+    $value            = encode('cp1252', $value); # Encode
+    $$refSTR{$key}    = $value if $key;
   }
   
 }  #--- End loadStr
@@ -68,6 +65,7 @@ sub loadDefaultStr
   $$refSTR{'Error'}              = 'Error';
   $$refSTR{'errorMsg'}           = 'Error messsage';
   $$refSTR{'errorConnection'}    = 'Connection error';
+  $$refSTR{'errorOpening'}       = 'Error opening';
   $$refSTR{'processRunning'}     = 'Running process';
   $$refSTR{'Smaller'}            = 'Smaller than';
   $$refSTR{'Equal'}              = 'Equal';
@@ -80,6 +78,7 @@ sub loadDefaultStr
   $$refSTR{'After'}              = 'After';
   $$refSTR{'Options'}            = 'Options';
   $$refSTR{'report'}             = 'report';
+  $$refSTR{'selFile'}            = 'Select a file';
   $$refSTR{'selDir'}             = 'Select a folder';
   $$refSTR{'selFiles'}           = 'Select one or multiple files';
   $$refSTR{'selDirReport'}       = 'Select a folder for the report';
@@ -98,7 +97,7 @@ sub loadDefaultStr
   $$refSTR{'HashingSHA1'}        = 'Calculating SHA1 for';
   $$refSTR{'HashingSHA256'}      = 'Calculating SHA256 for';
   $$refSTR{'HashingSHA512'}      = 'Calculating SHA512 for';
-  $$refSTR{'NumberLines'}        = 'Calculating number of lines for';
+  $$refSTR{'CalcNbrLines'}       = 'Calculating number of lines for';
   $$refSTR{'ListingExtensions'}  = 'Listing extension';
   $$refSTR{'WritingReport'}      = 'Writing report';
   $$refSTR{'Started'}            = 'started';
@@ -118,50 +117,64 @@ sub loadDefaultStr
   $$refSTR{'cancel'}             = 'Cancel';
   $$refSTR{'EndErrors'}          = 'error(s)';
   $$refSTR{'errDoc'}             = 'Documentation.chm have not been found in the program folder.';
-  
   # Main Window
   $$refSTR{'lblInputT'}           = 'Input';
   $$refSTR{'rbInputDir'}          = 'Folder';
   $$refSTR{'chInputDirRecurse'}   = 'Subfolders';
   $$refSTR{'rbInputFiles'}        = 'File(s)';
+  $$refSTR{'FileFilters'}         = 'File Filters';
   $$refSTR{'lblFiltersT'}         = 'Filters';
   $$refSTR{'filterSetTip'}        = 'Set filter';
   $$refSTR{'filterAddTip'}        = 'Add filter';
-  $$refSTR{'filterDelTip'}        = 'Del filter';
-  $$refSTR{'lblFunctionsT'}       = 'Functions';
+  $$refSTR{'filterDelTip'}        = 'Delele filter(s)';
+  $$refSTR{'Functions'}           = 'Functions';
   $$refSTR{'lblFunctions1T'}      = 'List';
   $$refSTR{'lblFunctions2T'}      = 'Copy or move';
   $$refSTR{'lblFunctions3T'}      = 'Rename';
-  $$refSTR{'rbListExt'}           = 'List extensions';
-  $$refSTR{'rbListFiles'}         = 'List files, include';
-  $$refSTR{'chListFilesOptFP'}    = 'Full path';
-  $$refSTR{'chListFilesOptFN'}    = 'Filename';
-  $$refSTR{'chListFilesOptHV'}    = 'Hash values';
-  $$refSTR{'chListFilesHV1'}      = 'MD5';
-  $$refSTR{'chListFilesHV2'}      = 'SHA1';
-  $$refSTR{'chListFilesHV3'}      = 'SHA256';
-  $$refSTR{'chListFilesHV4'}      = 'SHA512';
-  $$refSTR{'chListFilesOptFD'}    = 'File details';
-  $$refSTR{'chListFilesOptNbrL'}  = 'Number of lines';
-  $$refSTR{'chListFilesOptNH'}    = 'No header';
-  $$refSTR{'chListFilesOptNF'}    = 'No folder';
+  $$refSTR{'Extensions'}          = 'Extensions';
+  $$refSTR{'Files'}               = 'Files';
+  $$refSTR{'Include'}             = 'Include';
+  $$refSTR{'FullPath'}            = 'Full path';
+  $$refSTR{'Filename'}            = 'Filename';
+  $$refSTR{'HashValues'}          = 'Hash values';
+  $$refSTR{'FileDetails'}         = 'File details';
+  $$refSTR{'NumberFiles'}         = 'Number of files';
+  $$refSTR{'NumberLines'}         = 'Number of lines';
+  $$refSTR{'NoHeader'}            = 'No header';
+  $$refSTR{'NoFolder'}            = 'No folder';
   $$refSTR{'lblReportDir'}        = 'Report';
   $$refSTR{'browseDirReport'}     = 'Browse report folder in Explorer';
   $$refSTR{'chOpenReport'}        = 'Open report when finished';
   $$refSTR{'chSaveOpenDir'}       = 'Remember this dir';
-  $$refSTR{'rbCopy'}              = 'Copy';
-  $$refSTR{'rbMove'}              = 'Move';
+  $$refSTR{'Copy'}                = 'Copy';
+  $$refSTR{'Move'}                = 'Move';
   $$refSTR{'chCopyTree'}          = 'Duplicate tree structure';
   $$refSTR{'chCopyRemDouble'}     = 'Exclude duplicates (based on MD5)';
   $$refSTR{'lblDestination'}      = 'Destination';
   $$refSTR{'chOpenDstDir'}        = 'Open folder when finished';
-  $$refSTR{'rbRenReplace'}        = 'Replace';
-  $$refSTR{'chRenReplaceFolder'}  = 'Folders';
-  $$refSTR{'lblRenReplaceBy'}     = 'By';
-  $$refSTR{'rbRenByHash'}         = 'By hash';
-  $$refSTR{'rbRenSort'}           = 'By sort';
+  $$refSTR{'Replace'}             = 'Replace';
+  $$refSTR{'Folders'}             = 'Folders';
+  $$refSTR{'By'}                  = 'By';
+  $$refSTR{'ByHash'}              = 'By hash';
+  $$refSTR{'ExcludeDuplicates'}   = 'Exclude duplicates';
+  $$refSTR{'RemoveExtensions'}    = 'Remove extensions';
+  $$refSTR{'BySort'}              = 'By sort';
+  $$refSTR{'sortOpt'}             = 'Sort options';
+  $$refSTR{'sortBy'}              = 'Sort by';
+  $$refSTR{'cbSortByAlpha'}       = 'Alphabetical order';
+  $$refSTR{'Ascending'}           = 'Ascending';
+  $$refSTR{'Descending'}          = 'Descending';
+  $$refSTR{'renameOpt'}           = 'Rename options';
+  $$refSTR{'lblIncrValType'}      = 'Value type';
+  $$refSTR{'lblLength'}           = 'Length (min)';
+  $$refSTR{'lblLengthMax'}        = 'Length (max)';
+  $$refSTR{'lblInitVal'}          = 'Start with';
+  $$refSTR{'lblStepVal'}          = 'Step by';
+  $$refSTR{'lblPrefix'}           = 'Prefix (optional)';
+  $$refSTR{'lblSuffix'}           = 'Suffix (optional)';
+  $$refSTR{'lblExample'}          = 'Example';
   $$refSTR{'chRenReplaceByEval'}  = 'Eval';
-  $$refSTR{'lblNotReady'}         = 'Not Ready ? Click here';
+  $$refSTR{'lblNotReady'}         = 'Not Ready? Click here';
   $$refSTR{'notReady'}            = 'Not ready';
   $$refSTR{'nextStep'}            = 'Next step';
   $$refSTR{'selectInput'}         = 'You must select a dir or a list of files as input.';
@@ -180,7 +193,6 @@ sub loadDefaultStr
   $$refSTR{'StopProcess'}         = 'Stop process';
   $$refSTR{'Configuration'}       = 'Open Settings Window';
   $$refSTR{'btnHelpTip'}          = 'See Documentation';
-  
   # Filters Window
   $$refSTR{'Operator'}            = 'Operator';
   $$refSTR{'OR'}                  = 'OR';
@@ -189,20 +201,21 @@ sub loadDefaultStr
   $$refSTR{'TypeOp'}              = 'Type Operator';
   $$refSTR{'flags'}               = 'Flags';
   $$refSTR{'searchStr'}           = 'Search';
-  $$refSTR{'rbFiltersDirOnly'}    = 'Only folders';
-  $$refSTR{'rbFiltersSize'}       = 'File size';
-  $$refSTR{'rbFiltersContains'}   = 'Contains';
-  $$refSTR{'chFiltersContainsCase'}     = 'Match case';
-  $$refSTR{'chFiltersContainsRegex'}    = 'Regex';
-  $$refSTR{'chFiltersContainsFileOnly'} = 'Filename only';
-  $$refSTR{'rbFiltersLastAccess'} = 'Last accessed';
-  $$refSTR{'rbFiltersLastModif'}  = 'Last modified';
+  $$refSTR{'OnlyFolders'}         = 'Only folders';
+  $$refSTR{'FileSize'}            = 'File size';
+  $$refSTR{'Contains'}            = 'Contains';
+  $$refSTR{'MatchCase'}           = 'Match case';
+  $$refSTR{'Regex'}               = 'Regex';
+  $$refSTR{'FilenameOnly'}        = 'Filename only';
+  $$refSTR{'Size'}                = 'Size';
+  $$refSTR{'LastAccessed'}        = 'Last accessed';
+  $$refSTR{'LastModified'}        = 'Last modified';
   $$refSTR{'setContains'}         = 'You must enter a keyword or regex for this filter.';
   $$refSTR{'errRegex'}            = 'You must enter a valid regex.';
   $$refSTR{'setFileSize'}         = 'You must enter a valid file size for this filter.';
   $$refSTR{'setDate'}             = 'You must enter dates with valid format for this filter.';
   $$refSTR{'SetAddFilter'}        = 'Set or Add';
-  
+  $$refSTR{'Ok'}                  = 'Ok';
   # Config Window
   $$refSTR{'winConfig'}       = 'Settings';
   $$refSTR{'general'}         = 'General';
@@ -214,9 +227,7 @@ sub loadDefaultStr
   $$refSTR{'update1'}         = 'You have the latest version installed.';
   $$refSTR{'update2'}         = 'Check for update';
   $$refSTR{'update3'}         = 'Update';
-  $$refSTR{'update4'}         = 'Version';
   $$refSTR{'update5'}         = 'is available. Download it';
-  $$refSTR{'lblFuncT'}        = 'Functions';
   $$refSTR{'chHashLowercase'} = 'Use lowercases for hash value';
   # Logging tab
   $$refSTR{'logging'}         = 'Logging';
@@ -225,36 +236,18 @@ sub loadDefaultStr
   $$refSTR{'rbUseDefaultDir'} = 'Use default folder';
   $$refSTR{'chUseDestDirCM'}  = 'For copy or move, use destination folder';
   $$refSTR{'rbLoggingDir'}    = 'Use this folder';
-  
-  # Rename By Sort Option Window
-  $$refSTR{'sortOpt'}         = 'Sort options';
-  $$refSTR{'sortBy'}          = 'Sort by';
-  $$refSTR{'cbSortByAlpha'}   = 'Alphabetical order';
-  $$refSTR{'Ascending'}       = 'Ascending';
-  $$refSTR{'Descending'}      = 'Descending';
-  $$refSTR{'renameOpt'}       = 'Rename options';
-  $$refSTR{'lblIncrValType'}  = 'Value type';
-  $$refSTR{'lblLength'}       = 'Length (min)';
-  $$refSTR{'lblInitVal'}      = 'Start with';
-  $$refSTR{'lblStepVal'}      = 'Step by';
-  $$refSTR{'lblPrefix'}       = 'Prefix (optional)';
-  $$refSTR{'lblSuffix'}       = 'Suffix (optional)';
-  $$refSTR{'lblExample'}      = 'Example';
-  $$refSTR{'Ok'}              = 'Ok';
-  
   # Preview Window
   $$refSTR{'winPreview'}      = 'Preview';
   $$refSTR{'Root'}            = 'Root';
-  
   # About Window
-  $$refSTR{'about'}           = 'About';
-  $$refSTR{'version'}         = 'Version';
-  $$refSTR{'author'}          = 'Author';
-  $$refSTR{'translatedBy'}    = 'Translated by';
-  $$refSTR{'website'}         = 'Website';
-  $$refSTR{'translatorName'}  = '-';
+  $$refSTR{'About'}           = 'About';
+  $$refSTR{'Version'}         = 'Version';
+  $$refSTR{'Author'}          = 'Author';
+  $$refSTR{'TranslatedBy'}    = 'Translated by';
+  $$refSTR{'Website'}         = 'Website';
+  $$refSTR{'TranslatorName'}  = '-';
   
-  }  #--- End loadStrings
+}  #--- End loadStrings
 
 #------------------------------------------------------------------------------#
 1;

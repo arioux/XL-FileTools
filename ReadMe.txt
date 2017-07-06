@@ -5,13 +5,12 @@ Author 				: Alain Rioux (admin@le-tools.com)
 WebSite				: http://le-tools.com/XL-FileTools.html
 GitHub				: https://github.com/arioux/XL-FileTools
 Documentation	: http://le-tools.com/XL-FileToolsDoc.html
-FossHub      	: http://code.fosshub.com/XL-FileTools
 
 
 Licence
 -------
 
-Copyright (C) 2016  Alain Rioux (le-tools.com)
+Copyright (C) 2016-2017  Alain Rioux (le-tools.com)
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -64,6 +63,13 @@ The folder opened and folder closed in Preview window come from Silk Icons
 by FamFamFam (http://famfamfam.com/lab/icons/silk) and are distributed on 
 term of the CC Attribution 4.0 License.
 
-The filter icons (use, delete, add), the file, warning and error icons used in 
+The filter icons (add, delete), the file, warning and error icons used in 
 Preview window come from Fugue Icons by Yusuke Kamiyamane (http://p.yusukekamiyamane.com) 
 and are distributed on term of the CC Attribution 4.0 License.
+
+Big filter list icon has been created by Double-J Design and is distributed on 
+term of the CC Attribution-No Derivative 4.0 license.
+
+The import and save filters icons in File Filters window come from the Farm 
+Fresh Icons collection by Fatcow Web Hosting and are distributed on term of 
+the CC Attribution 4.0 license.
