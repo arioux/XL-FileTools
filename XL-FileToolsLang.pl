@@ -2,13 +2,14 @@
 # Perl - v: 5.16.3
 #------------------------------------------------------------------------------#
 # XL-FileToolsLang.pl : Strings for XL-FileTools
-# Website             : http://le-tools.com/
-# GitHub		          : https://github.com/arioux/XL-FileTools
+# Website             : http://le-tools.com/XL-FileTools.html
+# SourceForge         : https://sourceforge.net/p/xl-filetools
+# GitHub              : https://github.com/arioux/XL-FileTools
 # Creation            : 2016-05-15
-# Modified            : 2017-07-04
+# Modified            : 2018-04-01
 # Author              : Alain Rioux (admin@le-tools.com)
 #
-# Copyright (C) 2016-2017  Alain Rioux (le-tools.com)
+# Copyright (C) 2016-2018  Alain Rioux (le-tools.com)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -74,6 +75,10 @@ sub loadDefaultStr
   $$refSTR{'Kb'}                 = 'Kbytes';
   $$refSTR{'Mb'}                 = 'Mbytes';
   $$refSTR{'Gb'}                 = 'Gbytes';
+  $$refSTR{'b2'}                 = 'b';
+  $$refSTR{'Kb2'}                = 'Kb';
+  $$refSTR{'Mb2'}                = 'Mb';
+  $$refSTR{'Gb2'}                = 'Gb';
   $$refSTR{'Before'}             = 'Before';
   $$refSTR{'After'}              = 'After';
   $$refSTR{'Options'}            = 'Options';
@@ -85,6 +90,7 @@ sub loadDefaultStr
   $$refSTR{'selDirDst'}          = 'Select a destination folder';
   $$refSTR{'Extension'}          = 'Extension';
   $$refSTR{'Count'}              = 'Count';
+  $$refSTR{'Counting'}           = 'Counting...';
   $$refSTR{'ListingFile'}        = 'Listing files in';
   $$refSTR{'PreProcessing'}      = 'Pre-processing';
   $$refSTR{'Processing'}         = 'Processing';
@@ -138,6 +144,7 @@ sub loadDefaultStr
   $$refSTR{'Filename'}            = 'Filename';
   $$refSTR{'HashValues'}          = 'Hash values';
   $$refSTR{'FileDetails'}         = 'File details';
+  $$refSTR{'BasedOn'}             = 'Based on';
   $$refSTR{'NumberFiles'}         = 'Number of files';
   $$refSTR{'NumberLines'}         = 'Number of lines';
   $$refSTR{'NoHeader'}            = 'No header';
@@ -228,6 +235,8 @@ sub loadDefaultStr
   $$refSTR{'update2'}         = 'Check for update';
   $$refSTR{'update3'}         = 'Update';
   $$refSTR{'update5'}         = 'is available. Download it';
+  $$refSTR{'localTimezone'}   = 'Local timezone';
+  $$refSTR{'formatFileSize'}  = 'Format file size';
   $$refSTR{'chHashLowercase'} = 'Use lowercases for hash value';
   # Logging tab
   $$refSTR{'logging'}         = 'Logging';

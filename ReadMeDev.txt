@@ -3,6 +3,7 @@ Description 	: Part of the XL-Toolkit, XL-FileTools provides a bunch of tools fo
 								files like listing, copying, moving, renaming, etc.
 Author 				: Alain Rioux (admin@le-tools.com)
 WebSite				: http://le-tools.com/XL-FileTools.html
+SourceForge		: https://sourceforge.net/p/xl-filetools
 GitHub				: https://github.com/arioux/XL-FileTools
 Documentation	: http://le-tools.com/XL-FileToolsDoc.html
 
@@ -23,6 +24,8 @@ following modules installed:
 - Digest-SHA1 (v2.13)
 - Encode (v2.56)
 - File-Copy-Recursive (v0.38)
+- DateTime (v1.28)
+- DateTime-TimeZone (v2.00)
 - Time-Local (v1.2300)
 - Text-Roman (v3.5)
 - Excel-Writer-XLSX (v0.83)

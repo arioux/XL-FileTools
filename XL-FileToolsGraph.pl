@@ -2,13 +2,14 @@
 # Perl - v: 5.16.3
 #------------------------------------------------------------------------------#
 # XL-FileToolsGraph.pl  : Graphic elements for XL-FileTools
-# Website               : http://le-tools.com/
-# GitHub		            : https://github.com/arioux/XL-FileTools
+# Website               : http://le-tools.com/XL-FileTools.html
+# SourceForge           : https://sourceforge.net/p/xl-filetools
+# GitHub                : https://github.com/arioux/XL-FileTools
 # Creation              : 2016-05-15
 # Modified              : 2017-07-04
 # Author                : Alain Rioux (admin@le-tools.com)
 #
-# Copyright (C) 2016-2017  Alain Rioux (le-tools.com)
+# Copyright (C) 2016-201  Alain Rioux (le-tools.com)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by

@@ -2,16 +2,17 @@
 # Perl - v: 5.16.3
 #------------------------------------------------------------------------------#
 # Tool name   : XL-FileTools
-# Website     : http://le-tools.com/
-# GitHub		  : https://github.com/arioux/XL-FileTools
+# Website     : http://le-tools.com/XL-FileTools.html
+# SourceForge : https://sourceforge.net/p/xl-filetools
+# GitHub      : https://github.com/arioux/XL-FileTools
 # Description : Part of the XL-Toolkit, XL-FileTools provides a bunch of functions
 #               for files like filtering, listing, copying, moving and renaming.
 # Creation    : 2016-05-14
-# Modified    : 2017-07-04
-my $VERSION   = '4.0';
+# Modified    : 2018-04-01
+my $VERSION   = '4.1';
 # Author      : Alain Rioux (admin@le-tools.com)
 #
-# Copyright (C) 2016-2017  Alain Rioux (le-tools.com)
+# Copyright (C) 2016-2018  Alain Rioux (le-tools.com)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -41,7 +42,13 @@ use Excel::Writer::XLSX;
 use File::Copy;
 use File::Copy::Recursive qw(fcopy fmove);
 use File::Find;
-use Time::Local;
+use B::Hooks::EndOfScope::PP::FieldHash;
+use B::Hooks::EndOfScope::PP;
+use Params::Validate::PP;
+use DateTime;
+use DateTime::TimeZone;
+use Time::Local 'timelocal';
+use Win32::UTCFileTime qw(:globally);
 use Win32::API();
 use Win32::DriveInfo;
 use Win32::GUI();
@@ -74,6 +81,32 @@ my $HOURGLASS    :shared;                                                      #
 my $THR_PROCESS;                                                               # Thread for process
 my $THR_UPDATE;                                                                # Thread for update
 my $START = 0;                                                                 # Indicate when program is started
+my %ZONE_MAP = ('ADT'    => '-0300', # Atlantic Daylight Time                  # Ambiguous timezones
+                'AST'    => '-0400', # Atlantic Standard Time
+                'BST'    => '+0100', # British Summer Time
+                'BT'     => '+0600', # Baghdad Time
+                'CAT'    => '+0200', # Central Africa Time
+                'CCT'    => '+0630', # Cocos Islands Time
+                'CDT'    => '-0500', # Central Daylight Time
+                'CST'    => '-0600', # Central Standard Time
+                'EAST'   => '-0600', # Easter Island Standard Time
+                'ECT'    => '-0500', # Ecuador Time
+                'EDT'    => '-0400', # Eastern Daylight Time
+                'EST'    => '-0500', # Eastern Standard Time
+                'FDT'    => '-0100', # Fernando de Noronha Daylight Time
+                'FST'    => '-0200', # Fernando de Noronha Standard Time
+                'GST'    => '-0200', # South Georgia Time
+                'IDT'    => '+0300', # Israel Daylight Time
+                'IST'    => '+0200', # Israel Standard Time
+                'MET'    => '+0100', # Middle European Time
+                'NFT'    => '-0230', # Newfoundland Daylight Time
+                'NST'    => '-0330', # Newfoundland Standard Time
+                'PST'    => '-0800', # Pacific Standard Time
+                'SAST'   => '+0200', # South Africa Standard Time
+                'SST'    => '+0800', # Singapore Standard Time
+                'WAST'   => '+0200', # West Africa Summer Time
+                'WST'    => '+0800', # Western Standard Time}
+              );
 
 #------------------------------------------------------------------------------#
 # Graphic elements
@@ -226,13 +259,19 @@ $win->AddLabel(         -name         => 'lblListIncludeT'      ,
 $win->AddCheckbox(      -name         => 'chListFilesOptFP'     , # Full path
                         -size         => [130, 22]              ,
                         -pos          => [110,225]              ,
-                        -text         => $STR{'FullPath'},
+                        -text         => $STR{'FullPath'}       ,
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                , );
 $win->AddCheckbox(      -name         => 'chListFilesOptFN'     , # Filename
                         -size         => [130, 22]              ,
-                        -pos          => [110,252]              ,
-                        -text         => $STR{'Filename'},
+                        -pos          => [110,250]              ,
+                        -text         => $STR{'Filename'}       ,
+                        -background   => [255, 255, 255]        ,
+                        -font         => $font10                , );
+$win->AddCheckbox(      -name         => 'chListFilesOptCount'  , # Count
+                        -size         => [130, 22]              ,
+                        -pos          => [110,275]              ,
+                        -text         => $STR{'Count'}          ,
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                , );
 $win->AddCheckbox(      -name         => 'chListFilesOptFD'     , # File details
@@ -243,7 +282,7 @@ $win->AddCheckbox(      -name         => 'chListFilesOptFD'     , # File details
                         -font         => $font10                , );
 $win->AddCheckbox(      -name         => 'chListFilesOptHV'     , # Hash values
                         -size         => [140, 22]              ,
-                        -pos          => [245,252]              ,
+                        -pos          => [245,250]              ,
                         -text         => $STR{'HashValues'}.'...',
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                , );
@@ -255,7 +294,7 @@ $win->AddCheckbox(      -name         => 'chListFilesOptNbrF'   , # Number of fi
                         -font         => $font10                , );
 $win->AddCheckbox(      -name         => 'chListFilesOptNbrL'   , # Number of lines
                         -size         => [150, 22]              ,
-                        -pos          => [390,252]              ,
+                        -pos          => [390,250]              ,
                         -text         => $STR{'NumberLines'}    ,
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                , );
@@ -267,7 +306,7 @@ $win->AddCheckbox(      -name         => 'chListFilesOptNH'     , # No header
                         -font         => $font10                , );
 $win->AddCheckbox(      -name         => 'chListFilesOptNF'     , # No folder
                         -size         => [150, 22]              ,
-                        -pos          => [545,252]              ,
+                        -pos          => [545,250]              ,
                         -text         => $STR{'NoFolder'}       ,
                         -background   => [255, 255, 255]        ,
                         -font         => $font10                , );
@@ -342,6 +381,7 @@ $win->AddCombobox(      -name         => 'cbReportFormat'       ,
                         -dropdownlist => 1                      ,
                         -vscroll      => 1                      , );
 $win->cbReportFormat->Add('TXT', 'HTML', 'XLSX'                 , );
+$win->cbReportFormat->SetCurSel(0);
 $win->AddButton(        -name         => 'btnReportDir'         ,
                         -size         => [ 22, 22]              ,
                         -pos          => [477,285]              ,
@@ -936,6 +976,43 @@ $winFileDetails->AddButton(   -name         => 'btnFileDetailsOk'     ,
                               -default      => 1                      , );
 
 #------------------------------------------------------------------------------#
+# Count options window
+#------------------------------------------------------------------------------#
+my $winCountOpt = Win32::GUI::Window->new(-name        => 'winCountOpt'         ,
+                                          -background  => [255, 255, 255]       ,
+                                          -parent      => $win                  ,
+                                          -text        => $STR{'BasedOn'}.':'   ,
+                                          -pos         => [$winPosX, $winPosY]  ,
+                                          -size        => [160, 120]            ,
+                                          -hasmaximize => 0                     ,
+                                          -hasminimize => 0                     ,
+                                          -resizable   => 0                     ,
+                                          -dialogui    => 1                     , );
+$winCountOpt->SetIcon($winICO);
+$winCountOpt->AddRadioButton( -name         => 'rbListFilesCountMD5'  , # Based on MD5
+                              -size         => [180, 22]              ,
+                              -pos          => [  5,  5]              ,
+                              -text         => 'MD5'                  ,
+                              -background   => [255, 255, 255]        ,
+                              -font         => $font10                ,
+                              -checked      => 1                      ,
+                              -group        => 1                      ,
+                              -tabstop      => 1                      , );
+$winCountOpt->AddRadioButton( -name         => 'rbListFilesCountFN'   , # Based on filename
+                              -size         => [180, 22]              ,
+                              -pos          => [  5, 30]              ,
+                              -text         => $STR{'Filename'}       ,
+                              -background   => [255, 255, 255]        ,
+                              -font         => $font10                ,
+                              -tabstop      => 1                      , );
+$winCountOpt->AddButton(      -name         => 'btnWinCountOk'        ,
+                              -text         => $STR{'Ok'}             ,
+                              -size         => [ 60, 25]              ,
+                              -pos          => [ 50, 60]              ,
+                              -ok           => 1                      ,
+                              -default      => 1                      , );
+
+#------------------------------------------------------------------------------#
 # Preview window
 #------------------------------------------------------------------------------#
 my $winPreview = Win32::GUI::Window->new( -name        => 'winPreview'           ,
@@ -1028,7 +1105,7 @@ my $winConfig = Win32::GUI::DialogBox->new( -name        => 'winConfig'         
                                             -parent      => $win                    ,
                                             -text        => $STR{'winConfig'}       ,
                                             -pos         => [$winPosX, $winPosY]    ,
-                                            -size        => [600, 270]              ,
+                                            -size        => [600, 285]              ,
                                             -background  => [255, 255, 255]         ,
                                             -hasmaximize => 0                       ,
                                             -hasminimize => 0                       ,
@@ -1044,7 +1121,7 @@ $winConfig->AddLabel(     -name         => 'lblLogo'             ,
 
 # Tabstrip
 $winConfig->AddTabStrip(            -name         => 'configTab'      ,
-                                    -size         => [455,235]        ,
+                                    -size         => [455,250]        ,
                                     -pos          => [140,  5]        ,
                                     -fixedwidth   => 1                ,
                                     -tabstop      => 1                ,
@@ -1086,27 +1163,46 @@ $winConfig->AddCheckbox(    -name        => 'chAutoUpdate'          ,
                             -tabstop     => 1                       ,
                             -checked     => 1                       , );
 # Functions section
-$winConfig->AddLabel(       -name        => 'lblFuncShadowT'        ,
-                            -size        => [350, 22]               ,
-                            -pos         => [151,136]               ,
-                            -foreground  => [180, 180, 180]         ,
-                            -background  => [255, 255, 255]         ,
-                            -text        => $STR{'Functions'}.':'   ,
-                            -font        => $fontGB2                , );
-$winConfig->AddLabel(       -name        => 'lblFuncT'              ,
-                            -size        => [350, 22]               ,
-                            -pos         => [150,135]               ,
-                            -addstyle    => 11                      , # Transparent
-                            -foreground  => [250, 195,  27]         ,
-                            -text        => $STR{'Functions'}.':'   ,
-                            -font        => $fontGB2                , );
-$winConfig->AddCheckbox(    -name        => 'chHashLowercase'       ,
-                            -size        => [350, 20]               ,
-                            -pos         => [150,170]               ,
-                            -background  => [255, 255, 255]         ,
-                            -text        => $STR{'chHashLowercase'} ,
-                            -font        => $font10                 ,
-                            -tabstop     => 1                       , );
+$winConfig->AddLabel(       -name         => 'lblFuncShadowT'        ,
+                            -size         => [350, 22]               ,
+                            -pos          => [151,136]               ,
+                            -foreground   => [180, 180, 180]         ,
+                            -background   => [255, 255, 255]         ,
+                            -text         => $STR{'Functions'}.':'   ,
+                            -font         => $fontGB2                , );
+$winConfig->AddLabel(       -name         => 'lblFuncT'              ,
+                            -size         => [350, 22]               ,
+                            -pos          => [150,135]               ,
+                            -addstyle     => 11                      , # Transparent
+                            -foreground   => [250, 195,  27]         ,
+                            -text         => $STR{'Functions'}.':'   ,
+                            -font         => $fontGB2                , );
+$winConfig->AddLabel(       -name         => 'lblLocalTZ'            ,
+                            -size         => [120, 22]               ,
+                            -pos          => [150,173]               ,
+                            -background   => [255, 255, 255]         ,
+                            -text         => $STR{'localTimezone'}.':',
+                            -font         => $font10                 , );
+$winConfig->AddCombobox(    -name         => 'cbLocalTZ'             ,
+                            -size         => [260,100]               ,
+                            -pos          => [285,170]               ,
+                            -font         => $font10                 ,
+                            -dropdownlist => 1                       ,
+                            -vscroll      => 1                       , );
+$winConfig->AddCheckbox(    -name         => 'chFormatFileSize'      ,
+                            -size         => [350, 20]               ,
+                            -pos          => [150,200]               ,
+                            -background   => [255, 255, 255]         ,
+                            -text         => $STR{'formatFileSize'}  ,
+                            -font         => $font10                 ,
+                            -tabstop      => 1                       , );
+$winConfig->AddCheckbox(    -name         => 'chHashLowercase'       ,
+                            -size         => [350, 20]               ,
+                            -pos          => [150,225]               ,
+                            -background   => [255, 255, 255]         ,
+                            -text         => $STR{'chHashLowercase'} ,
+                            -font         => $font10                 ,
+                            -tabstop      => 1                       , );
 # Logging tab
 $winConfig->AddCheckbox(    -name        => 'chEnableLogging'       ,
                             -size        => [200, 20]               ,
@@ -1211,6 +1307,9 @@ $winPb->AddButton(      -name        => 'btnCancel'      ,
 #------------------------------------------------------------------------------#
 my $winFileFilters;
 my $winSelFileFilters;
+# List of timezone
+my @listTZ = DateTime::TimeZone->all_names;
+foreach (@listTZ) { $winConfig->cbLocalTZ->Add($_); }
 if (-T $CONFIG_FILE) {
   &loadConfig(\%CONFIG);
   if ($CONFIG{'TOOL_AUTO_UPDATE'}) { $THR_UPDATE = threads->create(sub { sleep(1); &updateTool(0); }); }
@@ -2500,6 +2599,7 @@ sub TabFunctions_Click
       $win->chListFilesOptFP->Show();
       $win->chListFilesOptNH->Show();
       $win->chListFilesOptFN->Hide();
+      $win->chListFilesOptCount->Hide();
       $win->chListFilesOptHV->Hide();
       $win->chListFilesOptFD->Show();
       $win->chListFilesOptNbrF->Show();
@@ -2519,6 +2619,7 @@ sub TabFunctions_Click
       $win->chListFilesOptFP->Show();
       $win->chListFilesOptNH->Show();
       $win->chListFilesOptFN->Show();
+      $win->chListFilesOptCount->Show();
       $win->chListFilesOptHV->Show();
       $win->chListFilesOptFD->Show();
       $win->chListFilesOptNbrF->Show();
@@ -2624,6 +2725,7 @@ sub TabFunctions_Click
     $win->lblListIncludeT->Hide();
     $win->chListFilesOptFP->Hide();
     $win->chListFilesOptFN->Hide();
+    $win->chListFilesOptCount->Hide();
     $win->chListFilesOptHV->Hide();
     $win->chListFilesOptFD->Hide();
     $win->chListFilesOptNbrF->Hide();
@@ -2705,6 +2807,7 @@ sub TabFunctions_Click
     $win->lblListIncludeT->Hide();
     $win->chListFilesOptFP->Hide();
     $win->chListFilesOptFN->Hide();
+    $win->chListFilesOptCount->Hide();
     $win->chListFilesOptHV->Hide();
     $win->chListFilesOptFD->Hide();
     $win->chListFilesOptNbrF->Hide();
@@ -2752,14 +2855,13 @@ sub TabFuncLists_Click
     $win->lblListIncludeT->Show();
     $win->chListFilesOptFP->Show();
     $win->chListFilesOptFN->Show();
+    $win->chListFilesOptCount->Show();
     $win->chListFilesOptHV->Show();
     $win->chListFilesOptFD->Show();
     $win->chListFilesOptNbrF->Show();
     $win->chListFilesOptNbrL->Show();
     $win->chListFilesOptNH->Show();
     $win->chListFilesOptNF->Show();
-    $win->cbReportFormat->Enable();
-    $win->cbReportFormat->SetCurSel(2);
     $win->lblListExtOptShadowT->Hide();
     $win->lblListExtOptT->Hide();
     $win->lblListExtMinLength->Hide();
@@ -2783,14 +2885,13 @@ sub TabFuncLists_Click
     $win->lblListIncludeT->Hide();
     $win->chListFilesOptFP->Hide();
     $win->chListFilesOptFN->Hide();
+    $win->chListFilesOptCount->Hide();
     $win->chListFilesOptHV->Hide();
     $win->chListFilesOptFD->Hide();
     $win->chListFilesOptNbrF->Hide();
     $win->chListFilesOptNbrL->Hide();
     $win->chListFilesOptNH->Hide();
     $win->chListFilesOptNF->Hide();
-    $win->cbReportFormat->SetCurSel(0);
-    $win->cbReportFormat->Disable();
     &isProcessReady(0);
   }
   
@@ -2891,6 +2992,35 @@ sub chListFilesFD3_Click     { &isProcessReady(0); }
 sub chListFilesOptNbrF_Click { &isProcessReady(0); }
 sub chListFilesOptNbrL_Click { &isProcessReady(0); }
 #--------------------------#
+
+#--------------------------#
+sub chListFilesOptCount_Click
+#--------------------------#
+{
+  if ($win->chListFilesOptCount->Checked()) {
+    $winCountOpt->Center($win);
+    $winCountOpt->Show();
+    $win->Disable();
+    return(1);
+  } else { &isProcessReady(0); }
+
+}  #--- End chListFilesOptCount_Click
+
+#--------------------------#
+sub btnWinCountOk_Click { &winCountOpt_Terminate(); }
+#--------------------------#
+
+#--------------------------#
+sub winCountOpt_Terminate
+#--------------------------#
+{
+  &isProcessReady(0);
+  $winCountOpt->Hide();
+  $win->Enable();
+  $win->SetForegroundWindow();
+  return(0);
+
+}  #--- End winCountOpt_Terminate
 
 #--------------------------#
 sub chListFilesOptNF_Click
@@ -4110,6 +4240,7 @@ sub listFilesReport
     # Options
     my $chListFilesOptFP    = $win->chListFilesOptFP->Checked();          # Full path
     my $chListFilesOptFN    = $win->chListFilesOptFN->Checked();          # Filename
+    my $chListFilesOptCount = $win->chListFilesOptCount->Checked();       # Count
     my $chListFilesHV1      = $winHashVal->chListFilesHV1->Checked();     # MD5
     my $chListFilesHV2      = $winHashVal->chListFilesHV2->Checked();     # SHA1
     my $chListFilesHV3      = $winHashVal->chListFilesHV3->Checked();     # SHA256
@@ -4119,26 +4250,54 @@ sub listFilesReport
     my $chListFilesFD3      = $winFileDetails->chListFilesFD3->Checked(); # Last modified
     my $chListFilesOptNbrF  = $win->chListFilesOptNbrF->Checked();        # Number of files
     my $chListFilesOptNbrL  = $win->chListFilesOptNbrL->Checked();        # Number of lines
-    # HTML format
+    my $basedOnMD5          = $winCountOpt->rbListFilesCountMD5->Checked(); # Based on MD5 (else Filename)
+    # Create selected format report
     my $formatReport   = $win->cbReportFormat->GetCurSel();
     my ($reportFilename, $nbrError);
+    # Count duplicates
+    my %count; # md5 or filename => count
+    if ($chListFilesOptCount) {
+      $win->lblPbCurr->Text($STR{'Counting'}.'...');
+      my $curr = 0;
+      foreach my $file (keys %{$refListFiles}) {
+        if (!-d $file) {
+          if ($basedOnMD5) {
+            if (my $digestMD5 = file_md5_hex($file)) {
+              if (exists($count{$digestMD5})) { $count{$digestMD5}++;   }
+              else                            { $count{$digestMD5} = 1; }
+            }
+          } else {
+            my (@fileParts) = split(/\\/, $file);
+            my $filename = pop(@fileParts);
+            if (exists($count{$filename})) { $count{$filename}++;   }
+            else                           { $count{$filename} = 1; }
+          }
+        }
+        # Progress
+        $curr++;
+        $win->lblPbCount->Text("$curr / $nbrFiles");
+        $win->pb->StepIt();
+      }
+      $win->pb->SetPos(0);
+    }
+    # HTML format
     if      ($formatReport == 1) {
-      ($reportFilename, $nbrError) = &writeListFilesReportHTML($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN,
+      ($reportFilename, $nbrError) = &writeListFilesReportHTML($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesOptCount, 
                                                                $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4,
                                                                $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF,
-                                                               $chListFilesOptNbrL, $logging, $fhLog);
+                                                               $chListFilesOptNbrL, $basedOnMD5, \%count, $logging, $fhLog);
     # XLSX format
     } elsif ($formatReport == 2) {
-      ($reportFilename, $nbrError) = &writeListFilesReportXLSX($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN,
+      ($reportFilename, $nbrError) = &writeListFilesReportXLSX($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesOptCount,
                                                                $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4,
                                                                $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF,
-                                                               $chListFilesOptNbrL, $logging, $fhLog);
+                                                               $chListFilesOptNbrL, $basedOnMD5, \%count, $logging, $fhLog);
     # Text format
     } else {
-      ($reportFilename, $nbrError) = &writeListFilesReportTXT( $refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN,
+      ($reportFilename, $nbrError) = &writeListFilesReportTXT( $refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesOptCount,
                                                                $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4,
                                                                $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF,
-                                                               $chListFilesOptNbrL, $logging, $fhLog);
+                                                               $chListFilesOptNbrL, $basedOnMD5, \%count, $logging, $fhLog);
     }
     $win->ShellExecute('open', $reportFilename,'','',1) if $win->chOpenReport->Checked(); # Open report
     # Logging
@@ -4158,9 +4317,9 @@ sub writeListFilesReportHTML
 #--------------------------#
 {
   # Local variables
-  my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesHV1, $chListFilesHV2, $chListFilesHV3,
-      $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF, $chListFilesOptNbrL,
-      $logging, $fhLog,) = @_;
+  my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesOptCount, $chListFilesHV1, $chListFilesHV2, $chListFilesHV3,
+      $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF, $chListFilesOptNbrL, $basedOnMD5, $refCount,
+      $logging, $fhLog) = @_;
   my $searchedFolder = $win->tfInput->Text()."\\";
   my $nbrError       = 0;
   my $curr           = 0;
@@ -4174,6 +4333,7 @@ sub writeListFilesReportHTML
     flock($fhReport, 2);
     print $fhReport "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">\n";
     print $fhReport "<html>\n<head>\n<title>XL-FileTools $STR{'report'} $timeStr</title>\n";
+    print $fhReport "<meta name=\"generator\" content=\"XL-FileTools $VERSION\">\n";
     print $fhReport "<style>\n";
     print $fhReport "table, td { border-collapse: collapse; border: 1px solid black; padding: 5px; }\n";
     print $fhReport "td { font-size:11pt; vertical-align: top; white-space: nowrap; }\n";
@@ -4187,6 +4347,7 @@ sub writeListFilesReportHTML
       print $fhReport "<tr>\n";
       print $fhReport "<td class=\"header\">$STR{'FullPath'}</td>\n"     if $chListFilesOptFP;
       print $fhReport "<td class=\"header\">$STR{'Filename'}</td>\n"     if $chListFilesOptFN;
+      print $fhReport "<td class=\"header\">$STR{'Count'}</td>\n"        if $chListFilesOptCount;
       print $fhReport "<td class=\"header\">MD5</td>\n"                  if $chListFilesHV1;
       print $fhReport "<td class=\"header\">SHA1</td>\n"                 if $chListFilesHV2;
       print $fhReport "<td class=\"header\">SHA256</td>\n"               if $chListFilesHV3;
@@ -4200,11 +4361,11 @@ sub writeListFilesReportHTML
     }
     foreach my $file (sort { $a cmp $b } keys %{$refListFiles}) {
       if ($file) {
-        if    (-d $file and $win->chListFilesOptNF->Checked()) { } # No folder
+        if    (-d $file and ($win->chListFilesOptNF->Checked() or !$chListFilesOptFP)) { } # No folder
         elsif (-d $file and $file eq $searchedFolder         ) { } # Searched folder
         else {
-          my (@stats);
-          (@stats) = stat($file) if $chListFilesOptFP and ($chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3); # File details
+          my (@stats) = stat($file) if $chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3; # File details
+          my $digestMD5;
           $win->lblPbCurr->Text($STR{'Processing'}.': '.$file);
           print $fhReport "<tr>\n";
           # Full path
@@ -4217,11 +4378,29 @@ sub writeListFilesReportHTML
               print $fhReport "<td>$filename</td>\n";
             } else { print $fhReport "<td>&nbsp;</td>\n"; }
           }
+          # Count
+          if ($chListFilesOptCount) {
+            if (!-d $file) { # For file only
+              if ($basedOnMD5) {
+                if ($digestMD5 = file_md5_hex($file)) {
+                  if (exists($$refCount{$digestMD5})) {
+                    print $fhReport "<td>$$refCount{$digestMD5}</td>\n";
+                  } else { print $fhReport "<td>&nbsp;</td>\n"; }
+                } else { print $fhReport "<td>&nbsp;</td>\n"; }
+              } else {
+                my (@fileParts) = split(/\\/, $file);
+                my $filename    = pop(@fileParts);
+                if (exists($$refCount{$filename})) {
+                  print $fhReport "<td>$$refCount{$filename}</td>\n";
+                } else { print $fhReport "<td>&nbsp;</td>\n"; }
+              }
+            } else { print $fhReport "<td>&nbsp;</td>\n"; }
+          }
           # MD5
           if ($chListFilesHV1) {
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');
-              if (my $digestMD5 = file_md5_hex($file)) {
+              if ($digestMD5 or (!$digestMD5 and $digestMD5 = file_md5_hex($file))) {
                 if ($CONFIG{'HASH_LOWERCASE'}) { print $fhReport "<td>".lc($digestMD5)."</td>\n"; }
                 else                           { print $fhReport "<td>".uc($digestMD5)."</td>\n"; }
               } else {
@@ -4276,12 +4455,18 @@ sub writeListFilesReportHTML
           # File size
           if ($chListFilesFD1) {
             if (!-d $file) { # File size
-              if ($stats[7]) { print $fhReport "<td>$stats[7]</td>\n"; }
-              else           { print $fhReport "<td>&nbsp;</td>\n";    }
+              my $sizeStr;
+              if    ($CONFIG{'FORMAT_FILESIZE'}) { $sizeStr = &formatFileSize($stats[7]); }
+              elsif ($stats[7]                 ) { $sizeStr = $stats[7];                  }
+              if ($sizeStr) { print $fhReport "<td>$sizeStr</td>\n"; }
+              else          { print $fhReport "<td>&nbsp;</td>\n";   }
             } else {         # Calculate dir size
               my $dirSize = 0;
               find(sub { $dirSize += -s if -f }, $file);
-              print $fhReport "<td>$dirSize</td>\n";
+              if ($CONFIG{'FORMAT_FILESIZE'}) {
+                my $sizeStr = &formatFileSize($dirSize);
+                print $fhReport "<td>$sizeStr</td>\n";
+              } else { print $fhReport "<td>$dirSize</td>\n"; }
             }
           }
           # Last accessed
@@ -4341,8 +4526,8 @@ sub writeListFilesReportXLSX
 #--------------------------#
 {
   # Local variables
-  my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesHV1, $chListFilesHV2, $chListFilesHV3,
-      $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF, $chListFilesOptNbrL,
+  my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesOptCount, $chListFilesHV1, $chListFilesHV2, $chListFilesHV3,
+      $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF, $chListFilesOptNbrL, $basedOnMD5, $refCount,
       $logging, $fhLog) = @_;
   my $searchedFolder = $win->tfInput->Text()."\\";
   my $nbrError       = 0;
@@ -4353,10 +4538,13 @@ sub writeListFilesReportXLSX
   $timeStr    =~ s/[ ]/_/g;
   my $reportFilename = $win->tfReportDir->Text()."\\"."XL-FileTools ".$STR{'report'}.'-'.$timeStr.'.xlsx'; # Ex.: XL-FileTools report-20160520_082215.xlsx
   if (my $excel = Excel::Writer::XLSX->new($reportFilename)) {
+    # Set metadata
+    $excel->set_properties(comments => 'Generated by XL-FileTools '.$VERSION);
     if (my $sheet = $excel->add_worksheet($STR{'lblFunctions1T'})) {
       # Column size
       my $maxWidthCol1  = length($STR{'FullPath'});
       my $maxWidthCol2  = length($STR{'Filename'});
+      my $maxWidthCol12 = length($STR{'Count'});
       my $maxWidthCol3  = length('MD5');
       my $maxWidthCol4  = length('SHA1');
       my $maxWidthCol5  = length('SHA256');
@@ -4374,27 +4562,28 @@ sub writeListFilesReportXLSX
         $formatHeader->set_align( 'center' );
         $formatHeader->set_align( 'vcenter' );
         my $j = 0; # Column no
-        if ($chListFilesOptFP)   { $sheet->write(0, $j, $STR{'FullPath'}    , $formatHeader); $j++; }
-        if ($chListFilesOptFN)   { $sheet->write(0, $j, $STR{'Filename'}    , $formatHeader); $j++; }
-        if ($chListFilesHV1)     { $sheet->write(0, $j, 'MD5'               , $formatHeader); $j++; }
-        if ($chListFilesHV2)     { $sheet->write(0, $j, 'SHA1'              , $formatHeader); $j++; }
-        if ($chListFilesHV3)     { $sheet->write(0, $j, 'SHA256'            , $formatHeader); $j++; }
-        if ($chListFilesHV4)     { $sheet->write(0, $j, 'SHA512'            , $formatHeader); $j++; }
-        if ($chListFilesFD1)     { $sheet->write(0, $j, $STR{'Size'}        , $formatHeader); $j++; }
-        if ($chListFilesFD2)     { $sheet->write(0, $j, $STR{'LastAccessed'}, $formatHeader); $j++; }
-        if ($chListFilesFD3)     { $sheet->write(0, $j, $STR{'LastModified'}, $formatHeader); $j++; }
-        if ($chListFilesOptNbrF) { $sheet->write(0, $j, $STR{'NumberFiles'} , $formatHeader); $j++; }
-        if ($chListFilesOptNbrL) { $sheet->write(0, $j, $STR{'NumberLines'} , $formatHeader); $j++; }
+        if ($chListFilesOptFP)    { $sheet->write_string(0, $j, $STR{'FullPath'}    , $formatHeader); $j++; }
+        if ($chListFilesOptFN)    { $sheet->write_string(0, $j, $STR{'Filename'}    , $formatHeader); $j++; }
+        if ($chListFilesOptCount) { $sheet->write_string(0, $j, $STR{'Count'}       , $formatHeader); $j++; }
+        if ($chListFilesHV1)      { $sheet->write_string(0, $j, 'MD5'               , $formatHeader); $j++; }
+        if ($chListFilesHV2)      { $sheet->write_string(0, $j, 'SHA1'              , $formatHeader); $j++; }
+        if ($chListFilesHV3)      { $sheet->write_string(0, $j, 'SHA256'            , $formatHeader); $j++; }
+        if ($chListFilesHV4)      { $sheet->write_string(0, $j, 'SHA512'            , $formatHeader); $j++; }
+        if ($chListFilesFD1)      { $sheet->write_string(0, $j, $STR{'Size'}        , $formatHeader); $j++; }
+        if ($chListFilesFD2)      { $sheet->write_string(0, $j, $STR{'LastAccessed'}, $formatHeader); $j++; }
+        if ($chListFilesFD3)      { $sheet->write_string(0, $j, $STR{'LastModified'}, $formatHeader); $j++; }
+        if ($chListFilesOptNbrF)  { $sheet->write_string(0, $j, $STR{'NumberFiles'} , $formatHeader); $j++; }
+        if ($chListFilesOptNbrL)  { $sheet->write_string(0, $j, $STR{'NumberLines'} , $formatHeader); $j++; }
         $i++;
       }
       foreach my $file (sort { $a cmp $b } keys %{$refListFiles}) {
         my $j = 0; # Column no
         if ($file) {
-          if    (-d $file and $win->chListFilesOptNF->Checked()) { } # No folder
+          if    (-d $file and ($win->chListFilesOptNF->Checked() or !$chListFilesOptFP)) { } # No folder
           elsif (-d $file and $file eq $searchedFolder         ) { } # Searched folder
           else {
-            my (@stats);
-            (@stats) = stat($file) if $chListFilesOptFP and ($chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3); # File details
+            my $digestMD5;
+            my (@stats) = stat($file) if $chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3; # File details
             $win->lblPbCurr->Text($STR{'Processing'}.': '.$file);
             # Full path
             if ($chListFilesOptFP) {
@@ -4412,11 +4601,32 @@ sub writeListFilesReportXLSX
               }
               $j++;
             }
+            # Count
+            if ($chListFilesOptCount) {
+              if (!-d $file) { # For file only
+                if ($basedOnMD5) {
+                  if ($digestMD5 = file_md5_hex($file)) {
+                    if (exists($$refCount{$digestMD5})) {
+                      $sheet->write_string($i, $j, $$refCount{$digestMD5});
+                      $maxWidthCol12 = length($$refCount{$digestMD5}) if length($$refCount{$digestMD5}) > $maxWidthCol12;
+                    }
+                  }
+                } else {
+                  my (@fileParts) = split(/\\/, $file);
+                  my $filename    = pop(@fileParts);
+                  if (exists($$refCount{$filename})) {
+                    $sheet->write_string($i, $j, $$refCount{$filename});
+                    $maxWidthCol12 = length($$refCount{$filename}) if length($$refCount{$filename}) > $maxWidthCol12;
+                  }
+                }
+              }
+              $j++;
+            }
             # MD5
             if ($chListFilesHV1) {
               if (!-d $file) { # For file only
                 $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');
-                if (my $digestMD5 = file_md5_hex($file)) {
+                if ($digestMD5 or (!$digestMD5 and $digestMD5 = file_md5_hex($file))) {
                   if ($CONFIG{'HASH_LOWERCASE'}) { $sheet->write_string($i, $j, lc($digestMD5)); }
                   else                           { $sheet->write_string($i, $j, uc($digestMD5)); }
                   $maxWidthCol3 = length($digestMD5) if length($digestMD5) > $maxWidthCol3;
@@ -4476,14 +4686,21 @@ sub writeListFilesReportXLSX
             if ($chListFilesFD1) {
               if (!-d $file) { # File size
                 if ($stats[7]) {
-                  $sheet->write_string($i, $j, $stats[7]);
-                  $maxWidthCol7 = length($stats[7]) if length($stats[7]) > $maxWidthCol7;
+                  my $sizeStr;
+                  if ($CONFIG{'FORMAT_FILESIZE'}) { $sizeStr = &formatFileSize($stats[7]); }
+                  else                            { $sizeStr = $stats[7];                  }
+                  $sheet->write_string($i, $j, $sizeStr);
+                  $maxWidthCol7 = length($sizeStr) if length($sizeStr) > $maxWidthCol7;
                 }
               } else {          # Calculate dir size
                 my $dirSize = 0;
                 find(sub { $dirSize += -s if -f }, $file);
-                $sheet->write_string($i, $j, $dirSize);
-                $maxWidthCol7 = length($dirSize) if length($dirSize) > $maxWidthCol7;
+                my $sizeStr;
+                if ($CONFIG{'FORMAT_FILESIZE'}) {
+                  $sizeStr = &formatFileSize($dirSize);
+                  $sheet->write_string($i, $j, $sizeStr);
+                } else { $sheet->write_string($i, $j, $dirSize); $sizeStr = $dirSize; }
+                $maxWidthCol7 = length($sizeStr) if length($sizeStr) > $maxWidthCol7;
               }
               $j++;
             }
@@ -4544,6 +4761,7 @@ sub writeListFilesReportXLSX
       my $j = 0;
       if ($chListFilesOptFP)    { $sheet->set_column($j, $j, $maxWidthCol1);  $j++; } # Full path
       if ($chListFilesOptFN)    { $sheet->set_column($j, $j, $maxWidthCol2);  $j++; } # Filename
+      if ($chListFilesOptCount) { $sheet->set_column($j, $j, $maxWidthCol12); $j++; } # Count
       if ($chListFilesHV1)      { $sheet->set_column($j, $j, $maxWidthCol3);  $j++; } # MD5
       if ($chListFilesHV2)      { $sheet->set_column($j, $j, $maxWidthCol4);  $j++; } # SHA1
       if ($chListFilesHV3)      { $sheet->set_column($j, $j, $maxWidthCol5);  $j++; } # SHA256
@@ -4565,9 +4783,9 @@ sub writeListFilesReportTXT
 #--------------------------#
 {
   # Local variables
-  my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesHV1, $chListFilesHV2, $chListFilesHV3,
-      $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF, $chListFilesOptNbrL,
-      $logging, $fhLog,) = @_;
+  my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptFN, $chListFilesOptCount, $chListFilesHV1, $chListFilesHV2, $chListFilesHV3,
+      $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF, $chListFilesOptNbrL, $basedOnMD5, $refCount,
+      $logging, $fhLog) = @_;
   my $searchedFolder = $win->tfInput->Text()."\\";
   my $nbrError       = 0;
   my $curr           = 0;
@@ -4576,6 +4794,7 @@ sub writeListFilesReportTXT
   if (!$win->chListFilesOptNH->Checked()) {
     $header .= $STR{'FullPath'}     . "\t" if $chListFilesOptFP;
     $header .= $STR{'Filename'}     . "\t" if $chListFilesOptFN;
+    $header .= $STR{'Count'}        . "\t" if $chListFilesOptCount;
     $header .= 'MD5'                . "\t" if $chListFilesHV1;
     $header .= 'SHA1'               . "\t" if $chListFilesHV2;
     $header .= 'SHA256'             . "\t" if $chListFilesHV3;
@@ -4597,11 +4816,11 @@ sub writeListFilesReportTXT
     if (!$win->chListFilesOptNH->Checked()) { print $fhReport "$header\n"; }
     foreach my $file (sort { $a cmp $b } keys %{$refListFiles}) {
       if ($file) {
-        if    (-d $file and $win->chListFilesOptNF->Checked()) { } # No folder
+        if    (-d $file and ($win->chListFilesOptNF->Checked() or !$chListFilesOptFP)) { } # No folder
         elsif (-d $file and $file eq $searchedFolder         ) { } # Searched folder
         else {
-          my (@stats);
-          (@stats) = stat($file) if $chListFilesOptFP and ($chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3); # File details
+          my (@stats) = stat($file) if $chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3; # File details
+          my $digestMD5;
           $win->lblPbCurr->Text($STR{'Processing'}.': '.$file);
           my $newLine;
           # Full path
@@ -4614,11 +4833,29 @@ sub writeListFilesReportTXT
               $newLine .= "$filename\t";
             } else { $newLine .= "\t"; }
           }
+          # Count
+          if ($chListFilesOptCount) {
+            if (!-d $file) { # For file only
+              if ($basedOnMD5) {
+                if ($digestMD5 = file_md5_hex($file)) {
+                  if (exists($$refCount{$digestMD5})) {
+                    $newLine .= "$$refCount{$digestMD5}\t";
+                  } else { $newLine .= "\t"; }
+                } else { $newLine .= "\t"; }
+              } else {
+                my (@fileParts) = split(/\\/, $file);
+                my $filename    = pop(@fileParts);
+                if (exists($$refCount{$filename})) {
+                  $newLine .= "$$refCount{$filename}\t";
+                } else { $newLine .= "\t"; }
+              }
+            } else { $newLine .= "\t"; }
+          }
           # MD5
           if ($chListFilesHV1) {
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');
-              if (my $digestMD5 = file_md5_hex($file)) {
+              if ($digestMD5 or (!$digestMD5 and $digestMD5 = file_md5_hex($file))) {
                 if ($CONFIG{'HASH_LOWERCASE'}) { $newLine .= lc($digestMD5) ."\t"; }
                 else                           { $newLine .= uc($digestMD5) ."\t"; }
               } else {
@@ -4673,12 +4910,18 @@ sub writeListFilesReportTXT
           # File size
           if ($chListFilesFD1) {
             if (!-d $file) { # File size
-              if ($stats[7]) { $newLine .= "$stats[7]\t"; }
-              else           { $newLine .= "\t";          }
+              my $sizeStr;
+              if    ($CONFIG{'FORMAT_FILESIZE'}) { $sizeStr = &formatFileSize($stats[7]); }
+              elsif ($stats[7]                 ) { $sizeStr = $stats[7];                  }
+              if ($sizeStr) { $newLine .= "$sizeStr\t"; }
+              else          { $newLine .= "\t";         }
             } else {         # Calculate dir size
               my $dirSize = 0;
               find(sub { $dirSize += -s if -f }, $file);
-              $newLine .= "$dirSize\t";
+              if ($CONFIG{'FORMAT_FILESIZE'}) {
+                my $sizeStr = &formatFileSize($dirSize);
+                $newLine   .= "$sizeStr\t";
+              } else { $newLine .= "$dirSize\t"; }
             }
           }
           # Last accessed
@@ -4774,22 +5017,132 @@ sub listExtReport
     }
     # Write the report
     $win->lblPbCurr->Text($STR{'WritingReport'}.'...');
-    my $timeStr = &date(time);
-    $timeStr    =~ s/[-:]//g;
-    $timeStr    =~ s/[ ]/_/g;
-    my $reportFilename = $dirReport."\\"."XL-FileTools ".$STR{'report'}.'-'.$timeStr.'.txt'; # Ex.: XL-FileTools report-20160520_082215.txt
-    if (open(my $fhReport, '>', $reportFilename)) {
-      flock($fhReport, 2);
-      print $fhReport "$STR{'Extension'}\t$STR{'Count'}\n";
-      foreach my $ext (reverse sort { $listExtensions{$a} <=> $listExtensions{$b} } keys %listExtensions) {
-        print $fhReport "$ext\t".$listExtensions{$ext}."\n" ;
-      }
-      close($fhReport);
-      $win->ShellExecute('open', $reportFilename,'','',1) if $win->chOpenReport->Checked(); # Open report
+    my $formatReport = $win->cbReportFormat->GetCurSel();
+    my ($reportFilename);
+    if      ($formatReport == 1) {
+      $reportFilename = &listExtReportHTML($dirReport, \%listExtensions);
+    # XLSX format
+    } elsif ($formatReport == 2) {
+      $reportFilename = &listExtReportXLSX($dirReport, \%listExtensions);
+    # Text format
+    } else {
+      $reportFilename = &listExtReportTXT( $dirReport, \%listExtensions);
     }
+    $win->ShellExecute('open', $reportFilename,'','',1) if $win->chOpenReport->Checked() and $reportFilename; # Open report
   }
   
 }  #--- End listExtReport
+
+#--------------------------#
+sub listExtReportHTML
+#--------------------------#
+{
+  # Local variables
+  my ($dirReport, $refListExtensions) = @_;
+  my $timeStr  = &date(time);
+  my $timeStr2 = $timeStr;
+  $timeStr2    =~ s/[-:]//g;
+  $timeStr2    =~ s/[ ]/_/g;
+  # Create the HTML report
+  my $reportFilename = $win->tfReportDir->Text()."\\"."XL-FileTools ".$STR{'report'}.'-'.$timeStr2.'.html'; # Ex.: XL-FileTools report-20160520_082215.html
+  if (open(my $fhReport, '>', $reportFilename)) {
+    flock($fhReport, 2);
+    print $fhReport "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\">\n";
+    print $fhReport "<html>\n<head>\n<title>XL-FileTools $STR{'report'} $timeStr</title>\n";
+    print $fhReport "<meta name=\"generator\" content=\"XL-FileTools $VERSION\">\n";
+    print $fhReport "<style>\n";
+    print $fhReport "table, td { border-collapse: collapse; border: 1px solid black; padding: 5px; }\n";
+    print $fhReport "td { font-size:11pt; vertical-align: top; white-space: nowrap; }\n";
+    print $fhReport ".header { text-align: center; font-weight: bold }\n";
+    print $fhReport "</style>\n";
+    print $fhReport "</head>\n";
+    print $fhReport "<body style=\"font-family: Calibri, Verdana, Arial;\">\n";
+    print $fhReport "<table align=\"center\">\n";
+    print $fhReport "<tr>\n";
+    print $fhReport "<td class=\"header\">$STR{'Extension'}</td>\n";
+    print $fhReport "<td class=\"header\">$STR{'Count'}</td>\n";
+    print $fhReport "</tr>\n";
+    foreach my $ext (reverse sort { $$refListExtensions{$a} <=> $$refListExtensions{$b} } keys %{$refListExtensions}) {
+      print $fhReport "<tr><td>$ext</td><td>$$refListExtensions{$ext}</td></tr>\n";
+    }
+    print $fhReport "</table>\n</body>\n</html>\n";
+    close($fhReport);
+    return($reportFilename);
+  }
+
+}  #--- End listExtReportHTML
+
+#--------------------------#
+sub listExtReportXLSX
+#--------------------------#
+{
+  # Local variables
+  my ($dirReport, $refListExtensions) = @_;
+  my $timeStr = &date(time);
+  $timeStr    =~ s/[-:]//g;
+  $timeStr    =~ s/[ ]/_/g;
+  my $reportFilename = $win->tfReportDir->Text()."\\"."XL-FileTools ".$STR{'report'}.'-'.$timeStr.'.xlsx'; # Ex.: XL-FileTools report-20160520_082215.xlsx
+  if (my $excel = Excel::Writer::XLSX->new($reportFilename)) {
+    # Set metadata
+    $excel->set_properties(comments => 'Generated by XL-FileTools '.$VERSION);
+    if (my $sheet = $excel->add_worksheet($STR{'Extensions'})) {
+      # Column size
+      my $maxWidthCol1 = length($STR{'Extension'});
+      my $maxWidthCol2 = length($STR{'Count'});
+      # Header
+      my $i = 0;
+      my $formatHeader = $excel->add_format();
+      $formatHeader->set_bold();
+      $formatHeader->set_align( 'center' );
+      $formatHeader->set_align( 'vcenter' );
+      my $j = 0; # Column no
+      $sheet->write_string(0, $j, $STR{'Extension'}, $formatHeader); $j++;
+      $sheet->write_string(0, $j, $STR{'Count'}    , $formatHeader); $j++;
+      $i++;
+      foreach my $ext (reverse sort { $$refListExtensions{$a} <=> $$refListExtensions{$b} } keys %{$refListExtensions}) {
+        $j = 0;
+        $sheet->write_string($i, $j, $ext);
+        $j++;
+        $maxWidthCol1 = length($ext) if length($ext) > $maxWidthCol1;
+        $sheet->write_number($i, $j, $$refListExtensions{$ext});
+        $j++;
+        $maxWidthCol1 = length($$refListExtensions{$ext}) if length($$refListExtensions{$ext}) > $maxWidthCol1;
+        $i++;
+      }
+      # Set column width
+      $j = 0;
+      $sheet->set_column($j, $j, $maxWidthCol1); # Extension
+      $j++;
+      $sheet->set_column($j, $j, $maxWidthCol2); # Count
+    }
+    $excel->close(); # Close the file
+    return($reportFilename);
+  }
+
+}  #--- End listExtReportXLSX
+
+#--------------------------#
+sub listExtReportTXT
+#--------------------------#
+{
+  # Local variables
+  my ($dirReport, $refListExtensions) = @_;
+  my $timeStr = &date(time);
+  $timeStr    =~ s/[-:]//g;
+  $timeStr    =~ s/[ ]/_/g;
+  # Create the text report
+  my $reportFilename = $dirReport."\\"."XL-FileTools ".$STR{'report'}.'-'.$timeStr.'.txt'; # Ex.: XL-FileTools report-20160520_082215.txt
+  if (open(my $fhReport, '>', $reportFilename)) {
+    flock($fhReport, 2);
+    print $fhReport "$STR{'Extension'}\t$STR{'Count'}\n";
+    foreach my $ext (reverse sort { $$refListExtensions{$a} <=> $$refListExtensions{$b} } keys %{$refListExtensions}) {
+      print $fhReport "$ext\t".$$refListExtensions{$ext}."\n" ;
+    }
+    close($fhReport);
+    return($reportFilename);
+  }
+
+}  #--- End listExtReportTXT
 
 #--------------------------#
 sub copyMove
@@ -5582,9 +5935,9 @@ sub isFunctionsReady
 #--------------------------#
 {
   # Lists
-  if (!$win->TabFunctions->SelectedItem() and   !$win->TabFuncLists->SelectedItem() and !$win->chListFilesOptFP->Checked() and
-      !$win->chListFilesOptFN->Checked()  and  !$win->chListFilesOptHV->Checked()   and !$win->chListFilesOptFD->Checked() and
-      !$win->chListFilesOptNbrF->Checked() and !$win->chListFilesOptNbrL->Checked()) {
+  if (!$win->TabFunctions->SelectedItem() and !$win->TabFuncLists->SelectedItem()   and !$win->chListFilesOptFP->Checked()  and
+      !$win->chListFilesOptFN->Checked()  and !$win->chListFilesOptCount->Checked() and !$win->chListFilesOptHV->Checked() and
+      !$win->chListFilesOptFD->Checked()  and !$win->chListFilesOptNbrF->Checked()  and !$win->chListFilesOptNbrL->Checked()) {
     $win->btnPreview->Enable();
     return($STR{'setListFilesOpt'});
   } elsif (!$win->TabFunctions->SelectedItem() and !$win->TabFuncLists->SelectedItem() and !-d $win->tfReportDir->Text()) {
@@ -5708,6 +6061,9 @@ sub configTab_Click
     $winConfig->btnExportLang->Show();
     $winConfig->lblFuncShadowT->Show();
     $winConfig->lblFuncT->Show();
+    $winConfig->lblLocalTZ->Show();
+    $winConfig->cbLocalTZ->Show();
+    $winConfig->chFormatFileSize->Show();
     $winConfig->chHashLowercase->Show();
     # Hide logging tab
     $winConfig->chEnableLogging->Hide();
@@ -5762,6 +6118,9 @@ sub configTab_Click
     $winConfig->btnExportLang->Hide();
     $winConfig->lblFuncShadowT->Hide();
     $winConfig->lblFuncT->Hide();
+    $winConfig->lblLocalTZ->Hide();
+    $winConfig->cbLocalTZ->Hide();
+    $winConfig->chFormatFileSize->Hide();
     $winConfig->chHashLowercase->Hide();
   }
 
@@ -5835,6 +6194,31 @@ sub updateTool
   else { Win32::GUI::MessageBox($winConfig, $STR{'errorConnection'}.': '.$res->status_line, "$STR{'update3'} XL-FileTools",0x40010) if $confirm; }
 
 }  #--- End updateTool
+
+#--------------------------#
+sub cbLocalTZ_Change
+#--------------------------#
+{
+  # Remember
+  $CONFIG{'LOCAL_TIMEZONE'} = $winConfig->cbLocalTZ->GetCurSel();
+  &saveConfig($CONFIG_FILE, \%CONFIG);
+  
+}  #--- End cbLocalTZ_Change
+
+#--------------------------#
+sub chFormatFileSize_Click
+#--------------------------#
+{
+  # Save the choice
+  if ($winConfig->chFormatFileSize->Checked()) {
+    $CONFIG{'FORMAT_FILESIZE'} = 1;
+    &saveConfig(\%CONFIG);
+  } else {
+    $CONFIG{'FORMAT_FILESIZE'} = 0;
+    &saveConfig(\%CONFIG);
+  }
+
+}  #--- End chFormatFileSize_Click
 
 #--------------------------#
 sub chHashLowercase_Click
@@ -6035,7 +6419,7 @@ sub btnAbout_Click
                         -pos         => [140, 80]               ,
                         -font        => $font10                 ,
                         -background  => [255, 255, 255]         ,
-                        -text        => '© Copyright 2016-2017 Alain Rioux', );
+                        -text        => '© Copyright 2016-2018 Alain Rioux', );
   $winAbout->Center($win);
   $winAbout->DoModal();
   return(1);
@@ -6074,11 +6458,23 @@ sub loadConfig
   # General tab
   if (exists($$refConfig{'TOOL_AUTO_UPDATE'})) { $winConfig->chAutoUpdate->Checked($$refConfig{'TOOL_AUTO_UPDATE'});  }
   else                                         { $winConfig->chAutoUpdate->Checked(1);                                } # Default is checked
-  if (exists($$refConfig{'HASH_LOWERCASE'}))   { $winConfig->chHashLowercase->Checked($$refConfig{'HASH_LOWERCASE'}); }
-  else                                         { $winConfig->chHashLowercase->Checked(1);                             } # Default is checked
+  if (exists($$refConfig{'LOCAL_TIMEZONE'}))   { $winConfig->cbLocalTZ->SetCurSel($$refConfig{'LOCAL_TIMEZONE'});     }
+  else { # Try to find local timezone, if not found, set to America/New_York
+    my $index = 0;
+    my $localTZ;
+    eval     { $localTZ = DateTime::TimeZone->new(name => 'local'); };
+    if (!$@) { $index   = $winConfig->cbLocalTZ->FindStringExact($localTZ->{name}); }
+		else     { $index   = 107; } # Default is America/New_York
+    $winConfig->cbLocalTZ->SetCurSel($index);
+    $$refConfig{'LOCAL_TIMEZONE'} = $index;
+  }
+  if (exists($$refConfig{'FORMAT_FILESIZE'}))  { $winConfig->chFormatFileSize->Checked($$refConfig{'FORMAT_FILESIZE'});   }
+  else                                         { $winConfig->chFormatFileSize->Checked(1);                                } # Default is checked
+  if (exists($$refConfig{'HASH_LOWERCASE'}))   { $winConfig->chHashLowercase->Checked($$refConfig{'HASH_LOWERCASE'});     }
+  else                                         { $winConfig->chHashLowercase->Checked(1);                                 } # Default is checked
   # Logging
-  if (exists($$refConfig{'ENABLE_LOGGING'}))   { $winConfig->chEnableLogging->Checked($$refConfig{'ENABLE_LOGGING'}); }
-  else                                         { $winConfig->chEnableLogging->Checked(1);                             } # Default is checked
+  if (exists($$refConfig{'ENABLE_LOGGING'}))   { $winConfig->chEnableLogging->Checked($$refConfig{'ENABLE_LOGGING'});     }
+  else                                         { $winConfig->chEnableLogging->Checked(1);                                 } # Default is checked
   if (exists($$refConfig{'LOGGING_DIR'}) and -d $$refConfig{'LOGGING_DIR'}) { # Use defined logging dir
     $winConfig->tfLoggingDir->Text($$refConfig{'LOGGING_DIR'});
     $winConfig->rbLoggingDir->Checked(1);
@@ -6112,7 +6508,30 @@ sub date
 {
   my $time = shift;
   $time    = time if !$time;
-  my ($s,$min,$h,$d,$m,$y,$d_w,$ha,$isDST) = localtime($time);
-  return(sprintf("%04d\-%02d\-%02d %02d:%02d:%02d", $y+1900, $m+1, $d, $h, $min, $s));
+  my $currDateTime = DateTime->from_epoch(epoch => $time);
+  $currDateTime->set_time_zone($winConfig->cbLocalTZ->GetString($CONFIG{'LOCAL_TIMEZONE'}));
+  return($currDateTime->strftime('%F %T %z'));
 
 }  #--- End date
+
+#------------------------------------------------------------------------------#
+sub formatFileSize
+#------------------------------------------------------------------------------#
+{
+  # Local variables
+  my $size = shift; # Size in bytes
+  my $sizeUnit = $STR{'b2'};
+  # Round to the biggest unit
+  if ($size > 1024) {
+    $size = int($size/1024);
+    if ($size > 1024) {
+      $size = int($size/1024);
+      if ($size > 1024) {
+        $size = int($size/1024);
+        $sizeUnit = $STR{'Gb2'};
+      } else { $sizeUnit = $STR{'Mb2'}; }
+    } else { $sizeUnit = $STR{'Kb2'}; }
+  }
+  return("$size $sizeUnit");
+  
+}  #--- End formatFileSize
