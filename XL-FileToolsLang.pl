@@ -6,7 +6,7 @@
 # SourceForge         : https://sourceforge.net/p/xl-filetools
 # GitHub              : https://github.com/arioux/XL-FileTools
 # Creation            : 2016-05-15
-# Modified            : 2018-04-01
+# Modified            : 2018-11-12
 # Author              : Alain Rioux (admin@le-tools.com)
 #
 # Copyright (C) 2016-2018  Alain Rioux (le-tools.com)
@@ -91,6 +91,7 @@ sub loadDefaultStr
   $$refSTR{'Extension'}          = 'Extension';
   $$refSTR{'Count'}              = 'Count';
   $$refSTR{'Counting'}           = 'Counting...';
+  $$refSTR{'CountDupl'}          = 'Count duplicates';
   $$refSTR{'ListingFile'}        = 'Listing files in';
   $$refSTR{'PreProcessing'}      = 'Pre-processing';
   $$refSTR{'Processing'}         = 'Processing';
@@ -104,6 +105,7 @@ sub loadDefaultStr
   $$refSTR{'HashingSHA256'}      = 'Calculating SHA256 for';
   $$refSTR{'HashingSHA512'}      = 'Calculating SHA512 for';
   $$refSTR{'CalcNbrLines'}       = 'Calculating number of lines for';
+  $$refSTR{'CalcNbrPages'}       = 'Calculating number of pages for';
   $$refSTR{'ListingExtensions'}  = 'Listing extension';
   $$refSTR{'WritingReport'}      = 'Writing report';
   $$refSTR{'Started'}            = 'started';
@@ -140,15 +142,22 @@ sub loadDefaultStr
   $$refSTR{'Extensions'}          = 'Extensions';
   $$refSTR{'Files'}               = 'Files';
   $$refSTR{'Include'}             = 'Include';
+  $$refSTR{'Path'}                = 'Path';
   $$refSTR{'FullPath'}            = 'Full path';
   $$refSTR{'Filename'}            = 'Filename';
   $$refSTR{'HashValues'}          = 'Hash values';
   $$refSTR{'FileDetails'}         = 'File details';
-  $$refSTR{'BasedOn'}             = 'Based on';
+  $$refSTR{'BasedOn'}             = 'Based on'; 
+  $$refSTR{'ListMembers'}         = 'List of members';
   $$refSTR{'NumberFiles'}         = 'Number of files';
   $$refSTR{'NumberLines'}         = 'Number of lines';
+  $$refSTR{'NumberPages'}         = 'Number of pages';
   $$refSTR{'NoHeader'}            = 'No header';
   $$refSTR{'NoFolder'}            = 'No folder';
+  $$refSTR{'tipFilesOnly'}        = 'Files only';
+  $$refSTR{'tipFolderZip'}        = 'Folders and Zip only';
+  $$refSTR{'tipTxtFilesOnly'}     = 'Text files only';
+  $$refSTR{'and'}                 = 'and';  
   $$refSTR{'lblReportDir'}        = 'Report';
   $$refSTR{'browseDirReport'}     = 'Browse report folder in Explorer';
   $$refSTR{'chOpenReport'}        = 'Open report when finished';
@@ -229,6 +238,7 @@ sub loadDefaultStr
   # General tab
   $$refSTR{'Tool'}            = 'Tool';
   $$refSTR{'Export'}          = 'Export';
+  $$refSTR{'OpenUserDir'}     = 'Open user dir';
   $$refSTR{'checkUpdate'}     = 'Check Update';
   $$refSTR{'AutoUpdateTip'}   = 'Check for update at startup';
   $$refSTR{'update1'}         = 'You have the latest version installed.';

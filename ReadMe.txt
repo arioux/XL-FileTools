@@ -1,10 +1,10 @@
 XL-FileTools
 Description 	: Part of the XL-Toolkit, XL-FileTools provides a bunch of tools for 
-							  files like listing, copying, moving, renaming, etc.
-Author 				: Alain Rioux (admin@le-tools.com)
-WebSite				: http://le-tools.com/XL-FileTools.html
+				  files like listing, copying, moving, renaming, etc.
+Author 			: Alain Rioux (admin@le-tools.com)
+WebSite			: http://le-tools.com/XL-FileTools.html
 SourceForge		: https://sourceforge.net/p/xl-filetools
-GitHub				: https://github.com/arioux/XL-FileTools
+GitHub			: https://github.com/arioux/XL-FileTools
 Documentation	: http://le-tools.com/XL-FileToolsDoc.html
 
 
