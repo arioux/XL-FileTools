@@ -8,8 +8,8 @@
 # Description : Part of the XL-Toolkit, XL-FileTools provides a bunch of functions
 #               for files like filtering, listing, copying, moving and renaming.
 # Creation    : 2016-05-14
-# Modified    : 2019-02-17
-my $VERSION   = '4.2.1';
+# Modified    : 2019-04-14
+my $VERSION   = '4.2.2';
 # Author      : Alain Rioux (admin@le-tools.com)
 #
 # Copyright (C) 2016-2019  Alain Rioux (le-tools.com)
@@ -4498,8 +4498,8 @@ sub writeListFilesReportHTML
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');
               if ($digestMD5 or (!$digestMD5 and $digestMD5 = file_md5_hex($file))) {
-                if ($CONFIG{'HASH_LOWERCASE'}) { print $fhReport "<td>".lc($digestMD5)."</td>\n"; }
-                else                           { print $fhReport "<td>".uc($digestMD5)."</td>\n"; }
+                if ($winConfig->chHashLowercase->Checked()) { print $fhReport "<td>".lc($digestMD5)."</td>\n"; }
+                else                                        { print $fhReport "<td>".uc($digestMD5)."</td>\n"; }
               } else {
                 print $fhReport "<td>&nbsp;</td>\n";
                 $nbrError++;
@@ -4512,8 +4512,9 @@ sub writeListFilesReportHTML
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingSHA1'}.': '.$file.'...');
               if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
-                if ($CONFIG{'HASH_LOWERCASE'}) { print $fhReport "<td>".lc($digestSHA1)."</td>\n"; }
-                else                           { print $fhReport "<td>".uc($digestSHA1)."</td>\n"; }
+                
+                if ($winConfig->chHashLowercase->Checked()) { print $fhReport "<td>".lc($digestSHA1)."</td>\n"; }
+                else                                        { print $fhReport "<td>".uc($digestSHA1)."</td>\n"; }
               } else {
                 print $fhReport "<td></td>\n";
                 $nbrError++;
@@ -4526,8 +4527,8 @@ sub writeListFilesReportHTML
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingSHA256'}.': '.$file.'...');
               if (my $digestSHA256 = Digest::SHA->new(256)->addfile($file,"b")->hexdigest) {
-                if ($CONFIG{'HASH_LOWERCASE'}) { print $fhReport "<td>".lc($digestSHA256)."</td>\n"; }
-                else                           { print $fhReport "<td>".uc($digestSHA256)."</td>\n"; }
+                if ($winConfig->chHashLowercase->Checked()) { print $fhReport "<td>".lc($digestSHA256)."</td>\n"; }
+                else                                        { print $fhReport "<td>".uc($digestSHA256)."</td>\n"; }
               } else {
                 print $fhReport "<td></td>\n";
                 $nbrError++;
@@ -4540,8 +4541,8 @@ sub writeListFilesReportHTML
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingSHA512'}.': '.$file.'...');
               if (my $digestSHA512 = Digest::SHA->new(512)->addfile($file,"b")->hexdigest) {
-                if ($CONFIG{'HASH_LOWERCASE'}) { print $fhReport "<td>".lc($digestSHA512)."</td>\n"; }
-                else                           { print $fhReport "<td>".uc($digestSHA512)."</td>\n"; }
+                if ($winConfig->chHashLowercase->Checked()) { print $fhReport "<td>".lc($digestSHA512)."</td>\n"; }
+                else                                        { print $fhReport "<td>".uc($digestSHA512)."</td>\n"; }
               } else {
                 print $fhReport "<td>&nbsp;</td>\n";
                 $nbrError++;
@@ -4553,14 +4554,14 @@ sub writeListFilesReportHTML
           if ($chListFilesFD1) {
             if (!-d $file) { # File size
               my $sizeStr;
-              if    ($CONFIG{'FORMAT_FILESIZE'}) { $sizeStr = &formatFileSize($stats[7]); }
-              elsif ($stats[7]                 ) { $sizeStr = $stats[7];                  }
+              if    ($winConfig->chFormatFileSize->Checked()) { $sizeStr = &formatFileSize($stats[7]); }
+              elsif ($stats[7]                              ) { $sizeStr = $stats[7];                  }
               if ($sizeStr) { print $fhReport "<td>$sizeStr</td>\n"; }
               else          { print $fhReport "<td>&nbsp;</td>\n";   }
             } else {         # Calculate dir size
               my $dirSize = 0;
               find(sub { $dirSize += -s if -f }, $file);
-              if ($CONFIG{'FORMAT_FILESIZE'}) {
+              if ($winConfig->chFormatFileSize->Checked()) {
                 my $sizeStr = &formatFileSize($dirSize);
                 print $fhReport "<td>$sizeStr</td>\n";
               } else { print $fhReport "<td>$dirSize</td>\n"; }
@@ -4807,8 +4808,8 @@ sub writeListFilesReportXLSX
               if (!-d $file) { # For file only
                 $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');
                 if ($digestMD5 or (!$digestMD5 and $digestMD5 = file_md5_hex($file))) {
-                  if ($CONFIG{'HASH_LOWERCASE'}) { $sheet->write_string($i, $j, lc($digestMD5), $formatNormal); }
-                  else                           { $sheet->write_string($i, $j, uc($digestMD5), $formatNormal); }
+                  if ($winConfig->chHashLowercase->Checked()) { $sheet->write_string($i, $j, lc($digestMD5), $formatNormal); }
+                  else                                        { $sheet->write_string($i, $j, uc($digestMD5), $formatNormal); }
                   $maxWidthCol3 = length($digestMD5) if length($digestMD5) > $maxWidthCol3;
                 } else {
                   $nbrError++;
@@ -4822,8 +4823,8 @@ sub writeListFilesReportXLSX
               if (!-d $file) { # For file only
                 $win->lblPbCurr->Text($STR{'HashingSHA1'}.': '.$file.'...');
                 if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
-                  if ($CONFIG{'HASH_LOWERCASE'}) { $sheet->write_string($i, $j, lc($digestSHA1), $formatNormal); }
-                  else                           { $sheet->write_string($i, $j, uc($digestSHA1), $formatNormal); }
+                  if ($winConfig->chHashLowercase->Checked()) { $sheet->write_string($i, $j, lc($digestSHA1), $formatNormal); }
+                  else                                        { $sheet->write_string($i, $j, uc($digestSHA1), $formatNormal); }
                   $maxWidthCol4 = length($digestSHA1) if length($digestSHA1) > $maxWidthCol4;
                 } else {
                   $nbrError++;
@@ -4837,8 +4838,8 @@ sub writeListFilesReportXLSX
               if (!-d $file) { # For file only
                 $win->lblPbCurr->Text($STR{'HashingSHA256'}.': '.$file.'...');
                 if (my $digestSHA256 = Digest::SHA->new(256)->addfile($file,"b")->hexdigest) {
-                  if ($CONFIG{'HASH_LOWERCASE'}) { $sheet->write_string($i, $j, lc($digestSHA256), $formatNormal); }
-                  else                           { $sheet->write_string($i, $j, uc($digestSHA256), $formatNormal); }
+                  if ($winConfig->chHashLowercase->Checked()) { $sheet->write_string($i, $j, lc($digestSHA256), $formatNormal); }
+                  else                                        { $sheet->write_string($i, $j, uc($digestSHA256), $formatNormal); }
                   $maxWidthCol5 = length($digestSHA256) if length($digestSHA256) > $maxWidthCol5;
                 } else {
                   $nbrError++;
@@ -4852,8 +4853,8 @@ sub writeListFilesReportXLSX
               if (!-d $file) { # For file only
                 $win->lblPbCurr->Text($STR{'HashingSHA512'}.': '.$file.'...');
                 if (my $digestSHA512 = Digest::SHA->new(512)->addfile($file,"b")->hexdigest) {
-                  if ($CONFIG{'HASH_LOWERCASE'}) { $sheet->write_string($i, $j, lc($digestSHA512), $formatNormal); }
-                  else                           { $sheet->write_string($i, $j, uc($digestSHA512), $formatNormal); }
+                  if ($winConfig->chHashLowercase->Checked()) { $sheet->write_string($i, $j, lc($digestSHA512), $formatNormal); }
+                  else                                        { $sheet->write_string($i, $j, uc($digestSHA512), $formatNormal); }
                   $maxWidthCol6 = length($digestSHA512) if length($digestSHA512) > $maxWidthCol6;
                 } else {
                   $nbrError++;
@@ -4867,8 +4868,8 @@ sub writeListFilesReportXLSX
               if (!-d $file) { # File size
                 if ($stats[7]) {
                   my $sizeStr;
-                  if ($CONFIG{'FORMAT_FILESIZE'}) { $sizeStr = &formatFileSize($stats[7]); }
-                  else                            { $sizeStr = $stats[7];                  }
+                  if ($winConfig->chFormatFileSize->Checked()) { $sizeStr = &formatFileSize($stats[7]); }
+                  else                                         { $sizeStr = $stats[7];                  }
                   $sheet->write_string($i, $j, $sizeStr, $formatNormal);
                   $maxWidthCol7 = length($sizeStr) if length($sizeStr) > $maxWidthCol7;
                 }
@@ -4876,7 +4877,7 @@ sub writeListFilesReportXLSX
                 my $dirSize = 0;
                 find(sub { $dirSize += -s if -f }, $file);
                 my $sizeStr;
-                if ($CONFIG{'FORMAT_FILESIZE'}) {
+                if ($winConfig->chFormatFileSize->Checked()) {
                   $sizeStr = &formatFileSize($dirSize);
                   $sheet->write_string($i, $j, $sizeStr, $formatNormal);
                 } else { $sheet->write_string($i, $j, $dirSize, $formatNormal); $sizeStr = $dirSize; }
@@ -5123,8 +5124,8 @@ sub writeListFilesReportTXT
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingMD5'}.': '.$file.'...');
               if ($digestMD5 or (!$digestMD5 and $digestMD5 = file_md5_hex($file))) {
-                if ($CONFIG{'HASH_LOWERCASE'}) { $newLine .= lc($digestMD5) ."\t"; }
-                else                           { $newLine .= uc($digestMD5) ."\t"; }
+                if ($winConfig->chHashLowercase->Checked()) { $newLine .= lc($digestMD5) ."\t"; }
+                else                                        { $newLine .= uc($digestMD5) ."\t"; }
               } else {
                 $newLine .= "\t";
                 $nbrError++;
@@ -5137,8 +5138,8 @@ sub writeListFilesReportTXT
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingSHA1'}.': '.$file.'...');
               if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
-                if ($CONFIG{'HASH_LOWERCASE'}) { $newLine .= lc($digestSHA1) ."\t"; }
-                else                           { $newLine .= uc($digestSHA1) ."\t"; }
+                if ($winConfig->chHashLowercase->Checked()) { $newLine .= lc($digestSHA1) ."\t"; }
+                else                                        { $newLine .= uc($digestSHA1) ."\t"; }
               } else {
                 $newLine .= "\t";
                 $nbrError++;
@@ -5151,8 +5152,8 @@ sub writeListFilesReportTXT
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingSHA256'}.': '.$file.'...');
               if (my $digestSHA256 = Digest::SHA->new(256)->addfile($file,"b")->hexdigest) {
-                if ($CONFIG{'HASH_LOWERCASE'}) { $newLine .= lc($digestSHA256) ."\t"; }
-                else                           { $newLine .= uc($digestSHA256) ."\t"; }
+                if ($winConfig->chHashLowercase->Checked()) { $newLine .= lc($digestSHA256) ."\t"; }
+                else                                        { $newLine .= uc($digestSHA256) ."\t"; }
               } else {
                 $newLine .= "\t";
                 $nbrError++;
@@ -5165,8 +5166,8 @@ sub writeListFilesReportTXT
             if (!-d $file) { # For file only
               $win->lblPbCurr->Text($STR{'HashingSHA512'}.': '.$file.'...');
               if (my $digestSHA512 = Digest::SHA->new(512)->addfile($file,"b")->hexdigest) {
-                if ($CONFIG{'HASH_LOWERCASE'}) { $newLine .= lc($digestSHA512) ."\t"; }
-                else                           { $newLine .= uc($digestSHA512) ."\t"; }
+                if ($winConfig->chHashLowercase->Checked()) { $newLine .= lc($digestSHA512) ."\t"; }
+                else                                        { $newLine .= uc($digestSHA512) ."\t"; }
               } else {
                 $newLine .= "\t";
                 $nbrError++;
@@ -5178,14 +5179,14 @@ sub writeListFilesReportTXT
           if ($chListFilesFD1) {
             if (!-d $file) { # File size
               my $sizeStr;
-              if    ($CONFIG{'FORMAT_FILESIZE'}) { $sizeStr = &formatFileSize($stats[7]); }
-              elsif ($stats[7]                 ) { $sizeStr = $stats[7];                  }
+              if    ($winConfig->chFormatFileSize->Checked()) { $sizeStr = &formatFileSize($stats[7]); }
+              elsif ($stats[7]                              ) { $sizeStr = $stats[7];                  }
               if ($sizeStr) { $newLine .= "$sizeStr\t"; }
               else          { $newLine .= "\t";         }
             } else {         # Calculate dir size
               my $dirSize = 0;
               find(sub { $dirSize += -s if -f }, $file);
-              if ($CONFIG{'FORMAT_FILESIZE'}) {
+              if ($winConfig->chFormatFileSize->Checked()) {
                 my $sizeStr = &formatFileSize($dirSize);
                 $newLine   .= "$sizeStr\t";
               } else { $newLine .= "$dirSize\t"; }
@@ -5851,8 +5852,8 @@ sub renameByHash
       # Rename file
       if ($hashFilename) {
         # Lowercases or uppercases?
-        if ($CONFIG{'HASH_LOWERCASE'}) { $hashFilename = lc($hashFilename); }
-        else                           { $hashFilename = uc($hashFilename); }
+        if ($winConfig->chHashLowercase->Checked()) { $hashFilename = lc($hashFilename); }
+        else                                        { $hashFilename = uc($hashFilename); }
         my $dstFilename = "$dstPath\\$hashFilename";
         $dstFilename   .= '.'.$extension if $extension and !$removeExt; # Add extension or not
         # File already exists
