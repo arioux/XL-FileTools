@@ -6,10 +6,10 @@
 # SourceForge           : https://sourceforge.net/p/xl-filetools
 # GitHub                : https://github.com/arioux/XL-FileTools
 # Creation              : 2016-05-15
-# Modified              : 2017-07-04
+# Modified              : 2019-07-20
 # Author                : Alain Rioux (admin@le-tools.com)
 #
-# Copyright (C) 2016-201  Alain Rioux (le-tools.com)
+# Copyright (C) 2016-2019  Alain Rioux (le-tools.com)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -7311,10 +7311,44 @@ RMP/ScX/R8b/47V+Rsf/Rsf/47V+Rsf/Rsf/4bR+QMT/////tXwJ////tn4O////////////////
 ////////////////////////////////////tn4O////vYwntn4OtnwJtnsHtnsItXsItnsItnsI
 tXsItnsItnsItXsItnwJtn4OvYwn////
 ) );
+  my $up16 = Win32::GUI::BitmapInline->new( q(
+Qk02AwAAAAAAADYAAAAoAAAAEAAAABAAAAABABgAAAAAAAADAADEDgAAxA4AAAAAAAAAAAAA////
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////+vv69/j39/j39/j39/j39/n39/n39/n39/n3
+9/n39/n39/n3+fr5/////////P38XpJeSo1KPoc+MogyKI0oH5IeEpcSB58GCawHC7AJDaULEJkO
+LZ0z+/z7////////nrueaqlqd7x3XrBeRalFLKcsFaoVALMAAMMAAMQAALAAEJwOnMab////////
+////////cJtwa69rYrFiSahJMaQxFqIWAKUAAK4AAK0ACaIIbK9q////////////////////+fr5
+ToVOY6xjTqZONZ41GJUYAJIAAJkABJkEQ51B+fv5////////////////////////5+3nOn06U6JT
+Opc6GYcZAH4AAYMBJY4j5u/m////////////////////////////////yNjIM34zP48/GncaAGkA
+EnwQxtzG////////////////////////////////////////nb2dMHwwGmYaB2MHm8Ka////////
+////////////////////////////////////////bqBuK2wqa6Nq////////////////////////
+////////////////////////////+vv6tM60+vv6////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////
+) );
+  my $down16 = Win32::GUI::BitmapInline->new( q(
+Qk02AwAAAAAAADYAAAAoAAAAEAAAABAAAAABABgAAAAAAAADAADEDgAAxA4AAAAAAAAAAAAA////
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////1OLU2ufa////
+////////////////////////////////////////////////2uXaM3kyIWwg2ebZ////////////
+////////////////////////////////8vXyO4A7Nn82A1QDMYQv8vby////////////////////
+/////////////////v7+W5BbRJFEM4kzA2gDBG8EVZ5U/v7+////////////////////////////
+////hquGSpVKRpxGLpMuBH0EAIEACIcHhLiD////////////////////////////tcq1SY9JW6tb
+QqJCLJ0sA48DAJYAAJkAEJUOtNKz////////////////////2uTaRodGb7hvVqxWPaU9K6YrAZ4B
+AKoAAK8AAKgAH5oc2OfY////////////8vXyS4VLgsOCarZqUaxROKc4KKsoAKkAALsAAMYAALsA
+A6YDN5w08fXx////////qMKoU5FTRIpEOIg4LYstI5AjHZccBZkEB6YFCbEHC6sJDZ8LG5sek8SW
+/////////v7+9vj29vj29vj29vj29vj29ff19ff19ff19ff19ff19ff19ff1/v7+////////////
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////
+////////////////////////////////
+) );
   return($winICO, $logoBmp, $logo128Bmp, $filterList128, $openDirBmp, $openFileBmp, $processBmp, $stopBmp,
          $previewBmp, $config32Bmp, $helpBmp, $aboutBmp, $config128Bmp, $browseBmp, $folderClosedBmp,
          $folderOpenedBmp, $fileBmp, $delFileBmp, $warnFileBmp, $filterSet, $filterAdd, $filterDel,
-         $importTab16Bmp, $saveTab16Bmp);
+         $importTab16Bmp, $saveTab16Bmp, $up16, $down16);
 }
 
 #------------------------------------------------------------------------------#

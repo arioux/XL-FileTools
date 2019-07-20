@@ -8,8 +8,8 @@
 # Description : Part of the XL-Toolkit, XL-FileTools provides a bunch of functions
 #               for files like filtering, listing, copying, moving and renaming.
 # Creation    : 2016-05-14
-# Modified    : 2019-04-14
-my $VERSION   = '4.2.2';
+# Modified    : 2019-07-20
+my $VERSION   = '4.3';
 # Author      : Alain Rioux (admin@le-tools.com)
 #
 # Copyright (C) 2016-2019  Alain Rioux (le-tools.com)
@@ -38,6 +38,7 @@ use Archive::Zip;
 use JSON qw(encode_json decode_json);
 use Digest::MD5::File qw(file_md5_hex);
 use Digest::SHA qw(sha1_hex sha256_hex sha512_hex);
+use Convert::Base32;
 use Text::Roman qw(:all);
 use Excel::Writer::XLSX;
 use Win32::OLE;
@@ -49,9 +50,6 @@ use CAM::PDF;
 use File::Copy;
 use File::Copy::Recursive qw(fcopy fmove);
 use File::Find;
-use B::Hooks::EndOfScope::PP::FieldHash;
-use B::Hooks::EndOfScope::PP;
-use Params::Validate::PP;
 use DateTime;
 use DateTime::TimeZone;
 use Time::Local 'timelocal';
@@ -121,7 +119,7 @@ my %ZONE_MAP = ('ADT'    => '-0300', # Atlantic Daylight Time                  #
 my ($winICO, $logoBmp, $logo128Bmp, $filterList128, $openDirBmp, $openFileBmp, $processBmp, $stopBmp,
     $previewBmp, $config32Bmp, $helpBmp, $aboutBmp, $config128Bmp, $browseBmp, $folderClosedBmp,
     $folderOpenedBmp, $fileBmp, $delFileBmp, $warnFileBmp, $filterSet, $filterAdd, $filterDel,
-    $importTab16Bmp, $saveTab16Bmp) = &loadGraph();
+    $importTab16Bmp, $saveTab16Bmp, $up16, $down16) = &loadGraph();
 
 #------------------------------------------------------------------------------#
 # Strings
@@ -152,11 +150,7 @@ $win->SetIcon($winICO);
 sub LOGPIXELSX() {88}
 sub getDPI { return(Win32::GUI::DC->new()->GetDeviceCaps(LOGPIXELSX)); }
 my $DPI = &getDPI();
-my $fontGB;
-my $fontGB2;
-my $font10;
-my $font10b;
-my $font10u;
+my ($fontGB, $fontGB2, $font10, $font10b, $font10u);
 # Larger size (125% and 150%)
 if ($DPI >= 120) {
   $fontGB  = new Win32::GUI::Font(-name => 'Arial', -size => 10, -bold => 1);
@@ -609,7 +603,8 @@ $win->AddCombobox(      -name         => 'cbRenBySortType'      ,
                         -vscroll      => 1                      ,
                         -visible      => 0                      , );
 $win->cbRenBySortType->Add($STR{'cbSortByAlpha'}, $STR{'FileSize'}    ,
-                           $STR{'LastAccessed'} , $STR{'LastModified'},);
+                           $STR{'LastAccessed'} , $STR{'LastModified'},
+                           $STR{'Created'},);
 $win->cbRenBySortType->SetCurSel(0);
 $win->AddRadioButton(   -name         => 'rbRenBySortAsc'       ,
                         -size         => [100, 22]              ,
@@ -931,7 +926,7 @@ my $winHashVal = Win32::GUI::Window->new( -name        => 'winHashVal'          
                                           -parent      => $win                   ,
                                           -text        => $STR{'HashValues'}     ,
                                           -pos         => [$winPosX, $winPosY]   ,
-                                          -size        => [220, 120]             ,
+                                          -size        => [220, 150]             ,
                                           -hasmaximize => 0                      ,
                                           -hasminimize => 0                      ,
                                           -resizable   => 0                      ,
@@ -965,10 +960,17 @@ $winHashVal->AddCheckbox( -name         => 'chListFilesHV4'       ,
                           -background   => [255, 255, 255]        ,
                           -font         => $font10                ,
                           -tabstop      => 1                      , );
+$winHashVal->AddCheckbox( -name         => 'chListFilesHV5'       ,
+                          -size         => [ 90, 22]              ,
+                          -pos          => [  5, 55]              ,
+                          -text         => 'SHA1-32'              ,
+                          -background   => [255, 255, 255]        ,
+                          -font         => $font10                ,
+                          -tabstop      => 1                      , );
 $winHashVal->AddButton(   -name         => 'btnHashValuesOk'      ,
                           -text         => $STR{'Ok'}             ,
                           -size         => [ 60, 25]              ,
-                          -pos          => [ 80, 60]              ,
+                          -pos          => [ 80, 85]              ,
                           -ok           => 1                      ,
                           -default      => 1                      , );
 
@@ -980,7 +982,7 @@ my $winFileDetails = Win32::GUI::Window->new( -name        => 'winFileDetails'  
                                               -parent      => $win                   ,
                                               -text        => $STR{'FileDetails'}    ,
                                               -pos         => [$winPosX, $winPosY]   ,
-                                              -size        => [200, 145]             ,
+                                              -size        => [200, 175]             ,
                                               -hasmaximize => 0                      ,
                                               -hasminimize => 0                      ,
                                               -resizable   => 0                      ,
@@ -1007,10 +1009,17 @@ $winFileDetails->AddCheckbox( -name         => 'chListFilesFD3'       , # Last m
                               -background   => [255, 255, 255]        ,
                               -font         => $font10                ,
                               -tabstop      => 1                      , );
+$winFileDetails->AddCheckbox( -name         => 'chListFilesFD4'       , # Created
+                              -size         => [180, 22]              ,
+                              -pos          => [  5, 80]              ,
+                              -text         => $STR{'Created'}        ,
+                              -background   => [255, 255, 255]        ,
+                              -font         => $font10                ,
+                              -tabstop      => 1                      , );
 $winFileDetails->AddButton(   -name         => 'btnFileDetailsOk'     ,
                               -text         => $STR{'Ok'}             ,
                               -size         => [ 60, 25]              ,
-                              -pos          => [ 70, 85]              ,
+                              -pos          => [ 70,110]              ,
                               -ok           => 1                      ,
                               -default      => 1                      , );
 
@@ -1434,7 +1443,7 @@ sub winMain_Resize
   $win->lblRenReplaceByOk->Width($win->ScaleWidth()-138);
   $win->lblRenReplaceByErr->Width($win->ScaleWidth()-138);
   $win->lblRenReplaceByWarn->Width($win->ScaleWidth()-138);
-  $win->tfRenReplaceBy->Width($win->ScaleWidth()-140);  
+  $win->tfRenReplaceBy->Width($win->ScaleWidth()-140);
   # Footer
   $win->lblFooter->Top($win->ScaleHeight()-55);
   $win->lblFooter->Width($win->ScaleWidth());
@@ -1488,8 +1497,7 @@ sub btnInput_Click
     if ($lastDir) {
       my(@parts) = split(/\\/, $lastDir);
       if (pop(@parts) =~ /\./) { while ($lastDir =~ /[^\\]$/) { chop($lastDir); } }
-      $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDir'}.':', -folderonly => 1,
-                                         -directory => $lastDir);
+      $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDir'}.':', -folderonly => 1, -directory => $lastDir);
     } else {
       $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDir'}.':', -folderonly => 1);
     }
@@ -1548,7 +1556,7 @@ sub btnInput_Click
   &isProcessReady(0);
   return(1);
   
-}  #--- End btnInputDir_Click
+}  #--- End btnInput_Click
 
 #--------------------------#
 sub rbInputFiles_Click
@@ -1627,6 +1635,18 @@ sub createWinFileFilters
                                 -bitmap       => $saveTab16Bmp           ,
                                 -tip          => $STR{'filterSaveTip'}   ,
                                 -disabled     => 1                       , );
+  $winFileFilters->AddButton(   -name         => 'btnFileFiltersUp'      ,
+                                -size         => [ 22, 22]               ,
+                                -pos          => [580, 53]               ,
+                                -bitmap       => $up16                   ,
+                                -tip          => $STR{'moveUp'}          ,
+                                -disabled     => 1                       , );
+  $winFileFilters->AddButton(   -name         => 'btnFileFiltersDown'    ,
+                                -size         => [ 22, 22]               ,
+                                -pos          => [602, 53]               ,
+                                -bitmap       => $down16                 ,
+                                -tip          => $STR{'moveDown'}        ,
+                                -disabled     => 1                       , );
   $winFileFilters->AddButton(   -name         => 'btnFileFiltersOk'      ,
                                 -text         => $STR{'Ok'}              ,
                                 -size         => [ 60, 30]               ,
@@ -1662,6 +1682,8 @@ sub winFileFilters_Resize
   $winFileFilters->btnFileFilterDel->Left($winFileFilters->ScaleWidth()-24);
   $winFileFilters->btnFileFiltersImport->Left($winFileFilters->ScaleWidth()-48);
   $winFileFilters->btnFileFiltersSave->Left($winFileFilters->ScaleWidth()-24);
+  $winFileFilters->btnFileFiltersUp->Left($winFileFilters->ScaleWidth()-48);
+  $winFileFilters->btnFileFiltersDown->Left($winFileFilters->ScaleWidth()-24);
   $winFileFilters->btnFileFiltersOk->Left($winFileFilters->ScaleWidth()/2);
   $winFileFilters->btnFileFiltersOk->Top($winFileFilters->ScaleHeight()-35);
 
@@ -1694,50 +1716,22 @@ sub btnFileFilterAdd_Click
 #--------------------------#
 {
   &createWinSelFileFilters() if !$winSelFileFilters;
-  # Only folders option can't be combined with other filter than Contains
-  my $onlyFolderOn = 0;
-  if (my $nbrFilters = $winFileFilters->gridFileFilters->GetRows() > 1) {
-    my $otherFilters = 0;
-    for (my $row = 1; $row < $winFileFilters->gridFileFilters->GetRows(); $row++) {
-      if    ($winFileFilters->gridFileFilters->GetCellText($row, 1) eq $STR{'OnlyFolders'} ) { $onlyFolderOn = 1 ; }
-      elsif ($winFileFilters->gridFileFilters->GetCellText($row, 1) ne $STR{'Contains'}    ) { $otherFilters = 1 ; }
-    }
-    # Only folder
-    if      ($onlyFolderOn and $winSelFileFilters->TabSelFileFiltersType->Count() > 1) {
-      $winSelFileFilters->TabSelFileFiltersType->DeleteAllItems();
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Contains'});
-    # There are other filters
-    } elsif ($otherFilters and $winSelFileFilters->TabSelFileFiltersType->Count() > 1) {
-      $winSelFileFilters->TabSelFileFiltersType->DeleteAllItems();
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Contains'});
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'FileSize'});
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastAccessed'});
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastModified'});
-    # There is only Contains, reset tabs
-    } elsif (!$onlyFolderOn and $winSelFileFilters->TabSelFileFiltersType->Count() != 5) {
-      $winSelFileFilters->TabSelFileFiltersType->DeleteAllItems();
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Contains'});
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'FileSize'});
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastAccessed'});
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastModified'});
-      $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'OnlyFolders'});
-    }
-  # Reset tabs
-  } elsif ($winSelFileFilters->TabSelFileFiltersType->Count() != 5) {
-    $winSelFileFilters->TabSelFileFiltersType->DeleteAllItems();
-    $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Contains'});
-    $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'FileSize'});
-    $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastAccessed'});
-    $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastModified'});
-    $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'OnlyFolders'});
-  }
+  # Only folders option can't be choosen more than once
+  my $onlyFolderOn = &isOnlyFoldersOn();
+  $winSelFileFilters->TabSelFileFiltersType->DeleteAllItems();
+  $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Contains'});
+  $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Size'});
+  $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastAccessed'});
+  $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastModified'});
+  $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Created'});
+  $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'OnlyFolders'}) if !$onlyFolderOn;
   # Reset Filter window controls
   $winSelFileFilters->lblSelFileFiltersEditRow->Text('');
   $winSelFileFilters->lblSelFileFiltersOp->Disable();
   $winSelFileFilters->cbSelFileFiltersOp->SetCurSel(0);
   $winSelFileFilters->cbSelFileFiltersOp->Disable();
   $winSelFileFilters->TabSelFileFiltersType->SetCurSel(0);
-  &TabSelFileFiltersType_Change($onlyFolderOn);
+  &TabSelFileFiltersType_Change();
   $winSelFileFilters->lblSelFileFiltersContainOk->Hide();
   $winSelFileFilters->lblSelFileFiltersContainErr->Hide();
   $winSelFileFilters->lblSelFileFiltersContainWarn->Hide();
@@ -1755,10 +1749,44 @@ sub btnFileFilterAdd_Click
     $winSelFileFilters->lblSelFileFiltersOp->Disable();
     $winSelFileFilters->cbSelFileFiltersOp->Disable();
   }
+  if ($onlyFolderOn) {
+    $winSelFileFilters->cbSelFileFiltersOp->SetCurSel(1);
+    $winSelFileFilters->cbSelFileFiltersOp->Disable();
+  }
   $winSelFileFilters->Center($win);
   $winSelFileFilters->Show();
 
 }  #--- End btnFileFilterAdd_Click
+
+#--------------------------#
+sub gridFileFilters_Click
+#--------------------------#
+{
+  # Local variables
+  my ($row, $column) = @_;
+  my $nbrRows = $winFileFilters->gridFileFilters->GetRows() - 1;
+  my $type    = $winFileFilters->gridFileFilters->GetCellText($row, 1);
+  if (!$row or $type eq $STR{'OnlyFolders'}) { # Header selected or Only Folder filter (can't be moved)
+    $winFileFilters->btnFileFiltersUp->Disable();
+    $winFileFilters->btnFileFiltersDown->Disable();
+  # Up and down button, at least 2 expressions
+  } elsif ($nbrRows > 1) {
+    # Up button enabled if not the first one and up filter is not Only Folder
+    if ($row != 1) {
+      my $upType = $winFileFilters->gridFileFilters->GetCellText($row-1, 1);
+      if ($upType ne $STR{'OnlyFolders'}) { $winFileFilters->btnFileFiltersUp->Enable(); }
+      else { $winFileFilters->btnFileFiltersDown->Disable(); }
+    } else { $winFileFilters->btnFileFiltersUp->Disable(); }
+    # Down button enabled if not the last one and down filter is not Only Folder
+    if ($row != $nbrRows) {
+      my $downType = $winFileFilters->gridFileFilters->GetCellText($row+1, 1);
+      if ($downType ne $STR{'OnlyFolders'}) { $winFileFilters->btnFileFiltersDown->Enable(); }
+      else { $winFileFilters->btnFileFiltersDown->Disable(); }
+    } else { $winFileFilters->btnFileFiltersDown->Disable(); }
+  }
+  return(1);
+
+}  #--- End gridFileFilters_Click
 
 #--------------------------#
 sub gridFileFilters_DblClick
@@ -1767,7 +1795,6 @@ sub gridFileFilters_DblClick
   # Local variables
   my $row = shift;
   &createWinSelFileFilters() if !$winSelFileFilters;
-  my $onlyFolderOn = &isOnlyFoldersOn();
   if ($row != 0) {
     # Gather values of current selection
     my $operator  = $winFileFilters->gridFileFilters->GetCellText($row, 0);
@@ -1778,11 +1805,12 @@ sub gridFileFilters_DblClick
     # Set values
     $winSelFileFilters->lblSelFileFiltersEditRow->Text($row);
     if    ($type eq $STR{'Contains'}    ) { $winSelFileFilters->TabSelFileFiltersType->SetCurSel(0); }
-    elsif ($type eq $STR{'FileSize'}    ) { $winSelFileFilters->TabSelFileFiltersType->SetCurSel(1); }
+    elsif ($type eq $STR{'Size'}        ) { $winSelFileFilters->TabSelFileFiltersType->SetCurSel(1); }
     elsif ($type eq $STR{'LastAccessed'}) { $winSelFileFilters->TabSelFileFiltersType->SetCurSel(2); }
     elsif ($type eq $STR{'LastModified'}) { $winSelFileFilters->TabSelFileFiltersType->SetCurSel(3); }
+    elsif ($type eq $STR{'Created'}     ) { $winSelFileFilters->TabSelFileFiltersType->SetCurSel(4); }
     else                                  { return(1); } # Only Folder can not be edited
-    &TabSelFileFiltersType_Change($onlyFolderOn);
+    &TabSelFileFiltersType_Change();
     if ($row == 1) { # First line, no operator
       $winSelFileFilters->cbSelFileFiltersOp->SetCurSel(0);
       $winSelFileFilters->cbSelFileFiltersOp->Disable();
@@ -1808,7 +1836,7 @@ sub gridFileFilters_DblClick
       $winSelFileFilters->chSelFileFiltersContainsFileOnly->Checked(1) if $fileOnly;
       $winSelFileFilters->tfSelFileFiltersContains->Text($searchStr);
     # Filter by size
-    } elsif ($type eq $STR{'FileSize'}) {
+    } elsif ($type eq $STR{'Size'}) {
       $winSelFileFilters->cbSelFileFiltersSizeOp->SetCurSel($winSelFileFilters->cbSelFileFiltersSizeOp->FindStringExact($typeOp));
       my ($size, $sizeUnit) = split(/ /, $searchStr);
       $winSelFileFilters->tfSelFileFiltersSize->Text($size);
@@ -1823,6 +1851,11 @@ sub gridFileFilters_DblClick
       $winSelFileFilters->cbSelFileFiltersLastModif->SetCurSel($winSelFileFilters->cbSelFileFiltersLastModif->FindStringExact($typeOp));
       my ($y, $m, $d) = split(/-/, $searchStr);
       $winSelFileFilters->dtSelFileFiltersLastModif->SetDate($y, $m, $d);
+    # Filter by created datetime
+    } elsif ($type eq $STR{'Created'}) {
+      $winSelFileFilters->cbSelFileFiltersCreated->SetCurSel($winSelFileFilters->cbSelFileFiltersCreated->FindStringExact($typeOp));
+      my ($y, $m, $d) = split(/-/, $searchStr);
+      $winSelFileFilters->dtSelFileFiltersCreated->SetDate($y, $m, $d);
     }
   }
   $winSelFileFilters->btnSelFileFiltersOk->Enable();
@@ -1842,7 +1875,7 @@ sub createWinSelFileFilters
                                                 -parent      => $win                   ,
                                                 -text        => $STR{'FileFilters'}    ,
                                                 -pos         => [$winPosX, $winPosY]   ,
-                                                -size        => [595, 250]             ,
+                                                -size        => [665, 250]             ,
                                                 -hasmaximize => 0                      ,
                                                 -hasminimize => 0                      ,
                                                 -resizable   => 0                      ,
@@ -1854,15 +1887,16 @@ sub createWinSelFileFilters
                                     -bitmap       => $filterList128          ,
                                     -background   => [255, 255, 255]         , );
   $winSelFileFilters->AddTabStrip(  -name         => 'TabSelFileFiltersType' ,
-                                    -size         => [451,223]               ,
+                                    -size         => [521,223]               ,
                                     -pos          => [140,  0]               ,
                                     -font         => $font10                 ,
                                     -tabstop      => 1                       ,
                                     -background   => [255, 255, 255]         , );
   $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Contains'}    );
-  $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'FileSize'}    );
+  $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Size'}        );
   $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastAccessed'});
   $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'LastModified'});
+  $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'Created'});
   $winSelFileFilters->TabSelFileFiltersType->InsertItem(-text => $STR{'OnlyFolders'} );
   $winSelFileFilters->AddLabel(     -name         => 'lblSelFileFiltersOp'   ,
                                     -size         => [100, 22]               ,
@@ -2013,6 +2047,25 @@ sub createWinSelFileFilters
                                     -format       => "shortdate"             ,
                                     -visible      => 0                       ,
                                     -tabstop      => 1                       , );
+  # Filter: Created
+  $winSelFileFilters->AddCombobox(  -name         => 'cbSelFileFiltersCreated',
+                                    -size         => [110, 22]               ,
+                                    -pos          => [250, 65]               ,
+                                    -font         => $font10                 ,
+                                    -dropdownlist => 1                       ,
+                                    -vscroll      => 1                       ,
+                                    -visible      => 0                       ,
+                                    -tabstop      => 1                       , );
+  $winSelFileFilters->cbSelFileFiltersCreated->Add($STR{'Before'}, $STR{'Equal'}, $STR{'After'});
+  $winSelFileFilters->cbSelFileFiltersCreated->SetCurSel(0);
+  $winSelFileFilters->AddDateTime(  -name         => 'dtSelFileFiltersCreated',
+                                    -size         => [110, 24]               ,
+                                    -pos          => [365, 65]               ,
+                                    -font         => $font10                 ,
+                                    -background   => [255, 255, 255]         ,
+                                    -format       => "shortdate"             ,
+                                    -visible      => 0                       ,
+                                    -tabstop      => 1                       , );
   $winSelFileFilters->AddButton(    -name         => 'btnSelFileFiltersNotReady',
                                     -size         => [ 30, 30]               ,
                                     -pos          => [225,180]               ,
@@ -2020,13 +2073,13 @@ sub createWinSelFileFilters
                                     -font         => $font10                 , );
   $winSelFileFilters->AddButton(    -name         => 'btnSelFileFiltersOk'   ,
                                     -size         => [100, 30]               ,
-                                    -pos          => [270,180]               ,
+                                    -pos          => [305,180]               ,
                                     -text         => $STR{'SetAddFilter'}    ,
                                     -font         => $font10                 ,
                                     -disabled     => 1                       , );
   $winSelFileFilters->AddButton(    -name         => 'btnSelFileFiltersCancel',
                                     -size         => [100, 30]               ,
-                                    -pos          => [385,180]               ,
+                                    -pos          => [420,180]               ,
                                     -text         => $STR{'cancel'}          ,
                                     -font         => $font10                 , );
   
@@ -2037,8 +2090,13 @@ sub TabSelFileFiltersType_Change
 #--------------------------#
 {
   # Local variables
-  my $onlyFolderOn = shift;
+  #my $onlyFolderOn = shift;
   my $type         = $winSelFileFilters->TabSelFileFiltersType->SelectedItem();
+  my $onlyFolderOn = &isOnlyFoldersOn();
+  if ($onlyFolderOn) {
+    $winSelFileFilters->cbSelFileFiltersOp->SetCurSel(1);
+    $winSelFileFilters->cbSelFileFiltersOp->Disable();
+  }
   # Contains
   if (!$type) {
     $winSelFileFilters->chSelFileFiltersContainsCase->Show();
@@ -2059,6 +2117,9 @@ sub TabSelFileFiltersType_Change
     # Hide Last modified options
     $winSelFileFilters->cbSelFileFiltersLastModif->Hide();
     $winSelFileFilters->dtSelFileFiltersLastModif->Hide();
+    # Hide Created options
+    $winSelFileFilters->cbSelFileFiltersCreated->Hide();
+    $winSelFileFilters->dtSelFileFiltersCreated->Hide();
   # File size
   } elsif ($type == 1) {
     $winSelFileFilters->cbSelFileFiltersSizeOp->Show();
@@ -2081,6 +2142,9 @@ sub TabSelFileFiltersType_Change
     # Hide Last modified options
     $winSelFileFilters->cbSelFileFiltersLastModif->Hide();
     $winSelFileFilters->dtSelFileFiltersLastModif->Hide();
+    # Hide Created options
+    $winSelFileFilters->cbSelFileFiltersCreated->Hide();
+    $winSelFileFilters->dtSelFileFiltersCreated->Hide();
   # Last accessed
   } elsif ($type == 2) {
     $winSelFileFilters->cbSelFileFiltersLastAccess->Show();
@@ -2103,6 +2167,9 @@ sub TabSelFileFiltersType_Change
     # Hide Last modified options
     $winSelFileFilters->cbSelFileFiltersLastModif->Hide();
     $winSelFileFilters->dtSelFileFiltersLastModif->Hide();
+    # Hide Created options
+    $winSelFileFilters->cbSelFileFiltersCreated->Hide();
+    $winSelFileFilters->dtSelFileFiltersCreated->Hide();
   # Last modified
   } elsif ($type == 3) {
     $winSelFileFilters->cbSelFileFiltersLastModif->Show();
@@ -2125,8 +2192,39 @@ sub TabSelFileFiltersType_Change
     # Hide Last accessed options
     $winSelFileFilters->cbSelFileFiltersLastAccess->Hide();
     $winSelFileFilters->dtSelFileFiltersLastAccess->Hide();
-  # Last modified
+    # Hide Created options
+    $winSelFileFilters->cbSelFileFiltersCreated->Hide();
+    $winSelFileFilters->dtSelFileFiltersCreated->Hide();
+  # Created
+  } elsif ($type == 4) {
+    $winSelFileFilters->cbSelFileFiltersCreated->Show();
+    $winSelFileFilters->dtSelFileFiltersCreated->Show();
+    $winSelFileFilters->lblSelFileFiltersItemList->Show();
+    $winSelFileFilters->tfSelFileFiltersItemList->Show();
+    $winSelFileFilters->btnSelFileFiltersOk->Enable();
+    # Hide Contains options
+    $winSelFileFilters->chSelFileFiltersContainsCase->Hide();
+    $winSelFileFilters->chSelFileFiltersContainsRegex->Hide();
+    $winSelFileFilters->chSelFileFiltersContainsFileOnly->Hide();
+    $winSelFileFilters->lblSelFileFiltersContainOk->Hide();
+    $winSelFileFilters->lblSelFileFiltersContainErr->Hide();
+    $winSelFileFilters->lblSelFileFiltersContainWarn->Hide();
+    $winSelFileFilters->tfSelFileFiltersContains->Hide();
+    # Hide File size options
+    $winSelFileFilters->cbSelFileFiltersSizeOp->Hide();
+    $winSelFileFilters->tfSelFileFiltersSize->Hide();
+    $winSelFileFilters->cbSelFileFiltersSizeUnit->Hide();
+    # Hide Last accessed options
+    $winSelFileFilters->cbSelFileFiltersLastAccess->Hide();
+    $winSelFileFilters->dtSelFileFiltersLastAccess->Hide();
+    # Hide Last modified options
+    $winSelFileFilters->cbSelFileFiltersLastModif->Hide();
+    $winSelFileFilters->dtSelFileFiltersLastModif->Hide();
+  # Only folders
   } else {
+    # Operator can't be OR
+    $winSelFileFilters->cbSelFileFiltersOp->SetCurSel(1);
+    $winSelFileFilters->cbSelFileFiltersOp->Disable();
     # Hide Contains options
     $winSelFileFilters->chSelFileFiltersContainsCase->Hide();
     $winSelFileFilters->chSelFileFiltersContainsRegex->Hide();
@@ -2147,6 +2245,9 @@ sub TabSelFileFiltersType_Change
     # Hide Last modified options
     $winSelFileFilters->cbSelFileFiltersLastModif->Hide();
     $winSelFileFilters->dtSelFileFiltersLastModif->Hide();
+    # Hide Created options
+    $winSelFileFilters->cbSelFileFiltersCreated->Hide();
+    $winSelFileFilters->dtSelFileFiltersCreated->Hide();
   }
   &isSelFileFiltersReady(0);
 
@@ -2159,6 +2260,7 @@ sub tfSelFileFiltersSize_Change         { &isSelFileFiltersReady(0); }
 sub tfSelFileFiltersItemList_Change     { &isSelFileFiltersReady(0); }
 sub dtSelFileFiltersLastAccess_Change   { &isSelFileFiltersReady(0); }
 sub dtSelFileFiltersLastModif_Change    { &isSelFileFiltersReady(0); }
+sub dtSelFileFiltersCreated_Change      { &isSelFileFiltersReady(0); }
 #--------------------------#
 
 #--------------------------#
@@ -2210,6 +2312,23 @@ sub cbSelFileFiltersLastModif_Change
   &isSelFileFiltersReady(0);
 
 }  #--- End cbSelFileFiltersLastModif_Change
+
+#--------------------------#
+sub cbSelFileFiltersCreated_Change
+#--------------------------#
+{
+  # Local variables
+  my $op = $winSelFileFilters->cbSelFileFiltersCreated->GetCurSel();
+  if ($op == 1) { # Equal
+    $winSelFileFilters->lblSelFileFiltersItemList->Enable();
+    $winSelFileFilters->tfSelFileFiltersItemList->Enable();
+  } else {
+    $winSelFileFilters->lblSelFileFiltersItemList->Disable();
+    $winSelFileFilters->tfSelFileFiltersItemList->Disable();
+  }
+  &isSelFileFiltersReady(0);
+
+}  #--- End cbSelFileFiltersCreated_Change
 
 #--------------------------#
 sub isSelFileFiltersReady
@@ -2303,6 +2422,19 @@ sub isSelFileFiltersReady
         $i++;
       }
     }
+  # Created
+  } elsif ($type == 4) {
+    my $op = $winSelFileFilters->cbSelFileFiltersCreated->GetCurSel();
+    if ($op == 1 and $winSelFileFilters->tfSelFileFiltersItemList->Text()) { # Equal with a list of date
+      my $nbrLines = $winSelFileFilters->tfSelFileFiltersItemList->GetLineCount();
+      my $i = 0;
+      while ($i <= $nbrLines) {
+        if (my $line = $winSelFileFilters->tfSelFileFiltersItemList->GetLine($i)) {
+          if ($line !~ /^\d{4}\-\d{2}\-\d{2}/) { $nextStep = $STR{'setDate'}; last; }
+        }
+        $i++;
+      }
+    }
   }
   # Return an error message or enable the button
   if ($nextStep) {
@@ -2345,8 +2477,7 @@ sub btnSelFileFiltersOk_Click
   my $flags;
   my @searchStrings;
   my $searchStr;
-  $operator = $winSelFileFilters->cbSelFileFiltersOp->GetString($winSelFileFilters->cbSelFileFiltersOp->GetCurSel())
-  if ($winSelFileFilters->cbSelFileFiltersOp->IsEnabled());
+  $operator = $winSelFileFilters->cbSelFileFiltersOp->GetString($winSelFileFilters->cbSelFileFiltersOp->GetCurSel());
   if (!$type) {
     # Search strings
     for (my $i = 0; $i <= $winSelFileFilters->tfSelFileFiltersContains->GetLineCount(); $i++) {
@@ -2403,6 +2534,21 @@ sub btnSelFileFiltersOk_Click
         if $winSelFileFilters->tfSelFileFiltersItemList->GetLine($i);
       }
     }
+  # Created
+  } elsif ($type == 4) {
+    $typeOp = $winSelFileFilters->cbSelFileFiltersCreated->GetString($winSelFileFilters->cbSelFileFiltersCreated->GetCurSel());
+    if ($winSelFileFilters->dtSelFileFiltersCreated->GetDate()) {
+      my ($d, $m, $y) = $winSelFileFilters->dtSelFileFiltersCreated->GetDate();
+      my $dateStr = sprintf("%04d\-%02d\-%02d", $y, $m, $d);
+      push(@searchStrings, $dateStr);
+    }
+    if ($winSelFileFilters->tfSelFileFiltersItemList->Text()) {
+      # Search strings
+      for (my $i = 0; $i <= $winSelFileFilters->tfSelFileFiltersItemList->GetLineCount(); $i++) {
+        push(@searchStrings, $winSelFileFilters->tfSelFileFiltersItemList->GetLine($i))
+        if $winSelFileFilters->tfSelFileFiltersItemList->GetLine($i);
+      }
+    }
   }
   # Feed the grid
   my $typeStr  = $winSelFileFilters->TabSelFileFiltersType->GetString($type);
@@ -2430,10 +2576,34 @@ sub btnSelFileFiltersOk_Click
         $winFileFilters->gridFileFilters->SetCellEditable($row, 4, 0);
       }
     }
-  } else { # File formats
+  } else {
     my $row;
     if ($editRow) { $row = $editRow; } # Edit mode
     else          { $row = $winFileFilters->gridFileFilters->InsertRow('-', -1); }
+    if ($type == 5 and $row != 1) { # Only Folder must always be the first filter if selected
+      # Move all other filters down
+      for (my $i = ($winFileFilters->gridFileFilters->GetRows()-2); $i > 0; $i--) {
+        # Values to move down
+        my $downOperator  = $winFileFilters->gridFileFilters->GetCellText($i, 0);
+        my $downType      = $winFileFilters->gridFileFilters->GetCellText($i, 1);
+        my $downTypeOp    = $winFileFilters->gridFileFilters->GetCellText($i, 2);
+        my $downFlagsStr  = $winFileFilters->gridFileFilters->GetCellText($i, 3);
+        my $downSearchStr = $winFileFilters->gridFileFilters->GetCellText($i, 4);
+        # Move down
+        my $upRow = $i + 1;
+        if ($i == 1) { $winFileFilters->gridFileFilters->SetCellText($upRow, 0, $STR{'AND'});   } # Operator was '-'
+        else         { $winFileFilters->gridFileFilters->SetCellText($upRow, 0, $downOperator); }
+        $winFileFilters->gridFileFilters->SetCellText($upRow, 1, $downType);
+        $winFileFilters->gridFileFilters->SetCellText($upRow, 2, $downTypeOp);
+        $winFileFilters->gridFileFilters->SetCellText($upRow, 3, $downFlagsStr);
+        $winFileFilters->gridFileFilters->SetCellText($upRow, 4, $downSearchStr);
+      }
+      $row = 1; # Only Folder goes to first row
+      $winFileFilters->gridFileFilters->SetCellText(1, 1, '');
+      $winFileFilters->gridFileFilters->SetCellText(1, 2, '');
+      $winFileFilters->gridFileFilters->SetCellText(1, 3, '');
+      $winFileFilters->gridFileFilters->SetCellText(1, 4, '');
+    }
     if ($operator and $row > 1) {
       $winFileFilters->gridFileFilters->SetCellText($row, 0, $operator);
       $winFileFilters->gridFileFilters->SetCellEditable($row, 0, 1);
@@ -2572,12 +2742,99 @@ sub btnFileFiltersSave_Click
 }  #--- End btnFileFiltersSave_Click
 
 #--------------------------#
+sub btnFileFiltersUp_Click
+#--------------------------#
+{
+  # Local variables
+  my $upRow   = ($winFileFilters->gridFileFilters->GetSelectedCellRange())[0];
+  my $downRow = $upRow - 1;
+  # Get selected row values
+  if ($downRow > 0) { # Not the first line
+    # Values to move up
+    my $upOperator    = $winFileFilters->gridFileFilters->GetCellText($upRow  , 0);
+    my $upType        = $winFileFilters->gridFileFilters->GetCellText($upRow  , 1);
+    my $upTypeOp      = $winFileFilters->gridFileFilters->GetCellText($upRow  , 2);
+    my $upFlagsStr    = $winFileFilters->gridFileFilters->GetCellText($upRow  , 3);
+    my $upSearchStr   = $winFileFilters->gridFileFilters->GetCellText($upRow  , 4);
+    # Values to move down
+    my $downOperator  = $winFileFilters->gridFileFilters->GetCellText($downRow, 0);
+    my $downType      = $winFileFilters->gridFileFilters->GetCellText($downRow, 1);
+    my $downTypeOp    = $winFileFilters->gridFileFilters->GetCellText($downRow, 2);
+    my $downFlagsStr  = $winFileFilters->gridFileFilters->GetCellText($downRow, 3);
+    my $downSearchStr = $winFileFilters->gridFileFilters->GetCellText($downRow, 4);
+    # Move values up
+    if ($downRow == 1) { $winFileFilters->gridFileFilters->SetCellText($downRow, 0, '-');         } # First row, no operator
+    else               { $winFileFilters->gridFileFilters->SetCellText($downRow, 0, $upOperator); }
+    $winFileFilters->gridFileFilters->SetCellText($downRow, 1, $upType);
+    $winFileFilters->gridFileFilters->SetCellText($downRow, 2, $upTypeOp);
+    $winFileFilters->gridFileFilters->SetCellText($downRow, 3, $upFlagsStr);
+    $winFileFilters->gridFileFilters->SetCellText($downRow, 4, $upSearchStr);
+    # Move values down
+    if ($downRow == 1) { $winFileFilters->gridFileFilters->SetCellText($upRow, 0, $STR{'OR'});    } # Operator was '-'
+    else               { $winFileFilters->gridFileFilters->SetCellText($upRow, 0, $downOperator); }
+    $winFileFilters->gridFileFilters->SetCellText($upRow, 1, $downType);
+    $winFileFilters->gridFileFilters->SetCellText($upRow, 2, $downTypeOp);
+    $winFileFilters->gridFileFilters->SetCellText($upRow, 3, $downFlagsStr);
+    $winFileFilters->gridFileFilters->SetCellText($upRow, 4, $downSearchStr);
+    &gridFileFilters_Click($downRow);
+    $winFileFilters->gridFileFilters->SetSelectedCellRange($downRow, 0, $downRow, 4);
+    $winFileFilters->gridFileFilters->Refresh();
+  }
+  return(1);
+  
+}  #--- End btnFileFiltersUp_Click
+
+#--------------------------#
+sub btnFileFiltersDown_Click
+#--------------------------#
+{
+  # Local variables
+  my $downRow = ($winFileFilters->gridFileFilters->GetSelectedCellRange())[0];
+  my $nbrRows = $winFileFilters->gridFileFilters->GetRows() - 1;
+  my $upRow   = $downRow + 1;
+  # Get selected row values
+  if ($downRow < $winFileFilters->gridFileFilters->GetRows()) { # Not the last line
+    # Values to move down
+    my $downOperator  = $winFileFilters->gridFileFilters->GetCellText($downRow, 0);
+    my $downType      = $winFileFilters->gridFileFilters->GetCellText($downRow, 1);
+    my $downTypeOp    = $winFileFilters->gridFileFilters->GetCellText($downRow, 2);
+    my $downFlagsStr  = $winFileFilters->gridFileFilters->GetCellText($downRow, 3);
+    my $downSearchStr = $winFileFilters->gridFileFilters->GetCellText($downRow, 4);
+    # Values to move up
+    my $upOperator    = $winFileFilters->gridFileFilters->GetCellText($upRow  , 0);
+    my $upType        = $winFileFilters->gridFileFilters->GetCellText($upRow  , 1);
+    my $upTypeOp      = $winFileFilters->gridFileFilters->GetCellText($upRow  , 2);
+    my $upFlagsStr    = $winFileFilters->gridFileFilters->GetCellText($upRow  , 3);
+    my $upSearchStr   = $winFileFilters->gridFileFilters->GetCellText($upRow  , 4);
+    # Move values down
+    if ($downRow == 1) { $winFileFilters->gridFileFilters->SetCellText($upRow, 0, $STR{'OR'});    } # Operator was '-'
+    else               { $winFileFilters->gridFileFilters->SetCellText($upRow, 0, $downOperator); }
+    $winFileFilters->gridFileFilters->SetCellText($upRow, 1, $downType);
+    $winFileFilters->gridFileFilters->SetCellText($upRow, 2, $downTypeOp);
+    $winFileFilters->gridFileFilters->SetCellText($upRow, 3, $downFlagsStr);
+    $winFileFilters->gridFileFilters->SetCellText($upRow, 4, $downSearchStr);
+    # Move values up
+    if ($downRow == 1) { $winFileFilters->gridFileFilters->SetCellText($downRow, 0, '-');         } # First row, no operator
+    else               { $winFileFilters->gridFileFilters->SetCellText($downRow, 0, $upOperator); }
+    $winFileFilters->gridFileFilters->SetCellText($downRow, 1, $upType);
+    $winFileFilters->gridFileFilters->SetCellText($downRow, 2, $upTypeOp);
+    $winFileFilters->gridFileFilters->SetCellText($downRow, 3, $upFlagsStr);
+    $winFileFilters->gridFileFilters->SetCellText($downRow, 4, $upSearchStr);
+    &gridFileFilters_Click($upRow);
+    $winFileFilters->gridFileFilters->SetSelectedCellRange($upRow, 0, $upRow, 4);
+    $winFileFilters->gridFileFilters->Refresh();
+  }
+  return(1);
+  
+}  #--- End btnFileFiltersDown_Click
+
+#--------------------------#
 sub isOnlyFoldersOn
 #--------------------------#
 {
   if ($winFileFilters) {
     for (my $row = 0; $row <= $winFileFilters->gridFileFilters->GetRows(); $row++) {
-      return(1) if $winFileFilters->gridFileFilters->GetCellText(1, 1) eq $STR{'OnlyFolders'};
+      return(1) if $winFileFilters->gridFileFilters->GetCellText($row, 1) eq $STR{'OnlyFolders'};
     }
     return(0);
   }
@@ -2588,7 +2845,7 @@ sub isOnlyFoldersOn
 sub OnlyFoldersOn
 #--------------------------#
 {
-  # Lot of options and functions don't apply to folders, disable it
+  # Lot of options and functions don't apply to folders, disable them
   $win->TabFunctions->DeleteAllItems();
   $win->TabFunctions->InsertItem(-text  => $STR{'lblFunctions1T'} , );
   $win->TabFunctions->InsertItem(-text  => $STR{'lblFunctions2T'} , );
@@ -2612,7 +2869,7 @@ sub OnlyFoldersOn
 sub OnlyFoldersOff
 #--------------------------#
 {
-  # Lot of options and functions don't apply to folders, disable it
+  # Lot of options and functions don't apply to folders, enable them
   $win->TabFunctions->DeleteAllItems();
   $win->TabFunctions->InsertItem(-text  => $STR{'lblFunctions1T'} , );
   $win->TabFunctions->InsertItem(-text  => $STR{'lblFunctions2T'} , );
@@ -2966,6 +3223,7 @@ sub TabFuncLists_Click
 
 #--------------------------#
 sub chListFilesOptFP_Click { &isProcessReady(0); }
+sub chListFilesOptP_Click  { &isProcessReady(0); }
 sub chListFilesOptF_Click  { &isProcessReady(0); }
 sub chListFilesOptFN_Click { &isProcessReady(0); }
 sub chListFilesOptFE_Click { &isProcessReady(0); }
@@ -2981,6 +3239,7 @@ sub chListFilesOptHV_Click
     $winHashVal->chListFilesHV2->Checked(1);
     $winHashVal->chListFilesHV3->Checked(1);
     $winHashVal->chListFilesHV4->Checked(1);
+    $winHashVal->chListFilesHV5->Checked(1);
     $winHashVal->Center($win);
     $winHashVal->Show();
     $win->Disable();
@@ -2990,6 +3249,7 @@ sub chListFilesOptHV_Click
     $winHashVal->chListFilesHV2->Checked(0);
     $winHashVal->chListFilesHV3->Checked(0);
     $winHashVal->chListFilesHV4->Checked(0);
+    $winHashVal->chListFilesHV5->Checked(0);
     &isProcessReady(0);
   }
 
@@ -3016,6 +3276,7 @@ sub chListFilesHV1_Click { &isProcessReady(0); }
 sub chListFilesHV2_Click { &isProcessReady(0); }
 sub chListFilesHV3_Click { &isProcessReady(0); }
 sub chListFilesHV4_Click { &isProcessReady(0); }
+sub chListFilesHV5_Click { &isProcessReady(0); }
 #--------------------------#
 
 #--------------------------#
@@ -3026,6 +3287,7 @@ sub chListFilesOptFD_Click
     $winFileDetails->chListFilesFD1->Checked(1);
     $winFileDetails->chListFilesFD2->Checked(1);
     $winFileDetails->chListFilesFD3->Checked(1);
+    $winFileDetails->chListFilesFD4->Checked(1);
     $winFileDetails->Center($win);
     $winFileDetails->Show();
     $win->Disable();
@@ -3034,6 +3296,7 @@ sub chListFilesOptFD_Click
     $winFileDetails->chListFilesFD1->Checked(0);
     $winFileDetails->chListFilesFD2->Checked(0);
     $winFileDetails->chListFilesFD3->Checked(0);
+    $winFileDetails->chListFilesFD4->Checked(0);
     &isProcessReady(0);
   }
 
@@ -3059,6 +3322,7 @@ sub winFileDetails_Terminate
 sub chListFilesFD1_Click     { &isProcessReady(0); }
 sub chListFilesFD2_Click     { &isProcessReady(0); }
 sub chListFilesFD3_Click     { &isProcessReady(0); }
+sub chListFilesFD4_Click     { &isProcessReady(0); }
 sub chListFilesOptNbrF_Click { &isProcessReady(0); }
 sub chListFilesOptNbrL_Click { &isProcessReady(0); }
 sub chListFilesOptNbrP_Click { &isProcessReady(0); }
@@ -3119,7 +3383,7 @@ sub tfReportDir_Change
     &saveConfig(\%CONFIG);
     if ($saveDir) {
       $win->tfReportDir->Text('');
-      Win32::GUI::MessageBox($win, $STR{'errNoValidFile'}, $STR{'Error'}, 0x40010) if $START;
+      Win32::GUI::MessageBox($win, $STR{'errNoValidDir'}, $STR{'Error'}, 0x40010) if $START;
     }
   }
   &isProcessReady(0);
@@ -3149,10 +3413,9 @@ sub btnReportDir_Click
   if ($lastDir) {
     my(@parts) = split(/\\/, $lastDir);
     if (pop(@parts) =~ /\./) { while ($lastDir =~ /[^\\]$/) { chop($lastDir); } }
-    $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDir'}.':', -folderonly => 1, -newui => 1,
-                                       -directory  => $lastDir);
+    $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDir'}.':', -newui => 1, -folderonly => 1, -directory  => $lastDir);
   } else {
-    $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDir'}.':', -folderonly => 1, -newui => 1);
+    $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDir'}.':', -newui => 1, -folderonly => 1,);
   }
   # Selected folder
   if ($dir and -d $dir) {
@@ -3205,10 +3468,9 @@ sub btnDestinationDir_Click
   if ($lastDir) {
     my(@parts) = split(/\\/, $lastDir);
     if (pop(@parts) =~ /\./) { while ($lastDir =~ /[^\\]$/) { chop($lastDir); } }
-    $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDirDst'}.':', -folderonly => 1,
-                                       -directory  => $lastDir);
+    $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDirDst'}.':', -newui => 1, -folderonly => 1, -directory  => $lastDir);
   } else {
-    $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDirDst'}.':', -folderonly => 1);
+    $dir = Win32::GUI::BrowseForFolder(-owner => $win, -title => $STR{'selDirDst'}.':', -newui => 1, -folderonly => 1);
   }
   # Selected folder
   if ($dir and -d $dir) {
@@ -3723,9 +3985,9 @@ sub btnProcess_Click
       # List Files or Extensions
       if (!$win->TabFunctions->SelectedItem()) {
         if (!$win->TabFuncLists->SelectedItem()) { &listFilesReport(\%listFiles); } # List Files
-        else                                     { &listExtReport(\%listFiles);   } # List Extensions
+        else                                     { &listExtReport(  \%listFiles); } # List Extensions
       }
-      elsif ($win->TabFunctions->SelectedItem() == 1) { &copyMove(\%listFiles, 1);    } # Copy or move
+      elsif ($win->TabFunctions->SelectedItem() == 1) { &copyMove(   \%listFiles, 1); } # Copy or move
       elsif ($win->TabFunctions->SelectedItem() == 2) { &renameFiles(\%listFiles, 1); } # Rename
       # Progress
       $win->lblPbCurr->Text('');
@@ -4079,7 +4341,7 @@ sub getListFiles
           } elsif ($nbrFilters and &testFilters($dir, $refFilters, $nbrFilters, $file, $filePath, $onlyFolders)) {
             $$refListFiles{$filePath} = 0;
           }
-        } elsif (!-d $filePath and -e $filePath) { # It's a file
+        } elsif (!-d $filePath and -e $filePath and !$onlyFolders) { # It's a file
           # No filter
           if    (!$nbrFilters) { $$refListFiles{$filePath} = 0; }
           # Filter match
@@ -4112,7 +4374,7 @@ sub getListFiles
               } elsif ($nbrFilters and &testFilters($dir, $refFilters, $nbrFilters, $file, $filePath, $onlyFolders)) {
                 $$refListFiles{$filePath} = 0;
               }
-            } elsif (!-d $filePath and -e $filePath) { # It's a file
+            } elsif (!-d $filePath and -e $filePath and !$onlyFolders) { # It's a file
               if (exists($$refListFiles{$subFolder})) { $$refListFiles{$subFolder}++; }
               # No filter
               if    (!$nbrFilters) { $$refListFiles{$filePath} = 0; }
@@ -4156,7 +4418,7 @@ sub setFilters
       $filters{$i}{'TypeOp'}    = $winFileFilters->gridFileFilters->GetCellText($row, 2) if $winFileFilters->gridFileFilters->GetCellText($row, 2);
       $filters{$i}{'Flags'}     = $winFileFilters->gridFileFilters->GetCellText($row, 3) if $winFileFilters->gridFileFilters->GetCellText($row, 3);
       $filters{$i}{'SearchStr'} = $winFileFilters->gridFileFilters->GetCellText($row, 4) if $winFileFilters->gridFileFilters->GetCellText($row, 4);
-      if ($filters{$i}{'Type'} eq $STR{'LastAccessed'} or $filters{$i}{'Type'} eq $STR{'LastModified'}) {
+      if ($filters{$i}{'Type'} eq $STR{'LastAccessed'} or $filters{$i}{'Type'} eq $STR{'LastModified'} or $filters{$i}{'Type'} eq $STR{'Created'}) {
         my ($y, $m, $d) = split(/\-/, $filters{$i}{'SearchStr'});
         $filters{$i}{'DateUT'} = timelocal(0,0,0,$d,$m-1,$y); # Store in Unixtime format
       }
@@ -4174,73 +4436,52 @@ sub testFilters
   # Local variables
   my ($dir, $refFilters, $nbrFilters, $file, $path, $onlyFolders) = @_;
   my $match       = 0;
-  # Path is a folder, only Contains filter applies
-  if ($path and -d $path) {
-    for (my $i = 1; $i <= $nbrFilters; $i++) {
-      if ($$refFilters{$i}{'Type'} eq $STR{'Contains'}) {
-        # Regex option is checked
-        my $expr;
-        my ($case, $regex, $fileOnly) = split(/\-/, $$refFilters{$i}{'Flags'});
-        if (!$regex) { $expr = quotemeta($$refFilters{$i}{'SearchStr'}); }
-        else         { $expr = $$refFilters{$i}{'SearchStr'};            }
-        if (!$fileOnly and ((!$case and $path =~ /$expr/i) or ($case and $path =~ /$expr/))) {
-          # Match and next operator is OR
-          if (exists($$refFilters{$i+1}{'Operator'}) and $$refFilters{$i+1}{'Operator'} eq $STR{'OR'}) {
-            return(1);
-          } else { $match = 1; }
-        # Don't match and operator is AND
-        } elsif (exists($$refFilters{$i+1}{'Operator'}) and $$refFilters{$i+1}{'Operator'} eq $STR{'AND'}) { return(0); }
-      # Filter size, Last accessed or Last modified apply to files only
-      } elsif (($$refFilters{$i}{'Type'} eq $STR{'FileSize'}     or
-                $$refFilters{$i}{'Type'} eq $STR{'LastAccessed'} or $$refFilters{$i}{'Type'} eq $STR{'LastModified'}) and
-               ((exists($$refFilters{$i+1}{'Operator'}) and $$refFilters{$i+1}{'Operator'} eq $STR{'AND'}) or
-                ($$refFilters{$i}{'Operator'} ne $STR{'OR'}))) {
-        return(0);
-      }
+  for (my $i = 1; $i <= $nbrFilters; $i++) {
+    my $matchTmp = 0;
+    # Contains filter
+    if ($$refFilters{$i}{'Type'} eq $STR{'Contains'}) {
+      my $expr;
+      my ($case, $regex, $fileOnly) = split(/\-/, $$refFilters{$i}{'Flags'});
+      if (!$regex) { $expr = quotemeta($$refFilters{$i}{'SearchStr'}); }
+      else         { $expr = $$refFilters{$i}{'SearchStr'};            }
+      my $relPath = $path =~ s/\Q$dir\E\\//r;
+      $relPath    = $file if $fileOnly;
+      if ((!$case and $relPath =~ /$expr/i) or ($case and $relPath =~ /$expr/)) {
+        $matchTmp = 1;
+      } else { $matchTmp = 0; }
+    # File size filter
+    } elsif ($$refFilters{$i}{'Type'} eq $STR{'Size'}) {
+      if (&cmpFileSize($path, $$refFilters{$i}{'SearchStr'}, $$refFilters{$i}{'TypeOp'})) {
+        $matchTmp = 1;
+      } else { $matchTmp = 0; }
+    # Filter: Last accessed, Last modified or Created
+    } elsif ($$refFilters{$i}{'Type'} eq $STR{'LastAccessed'} or
+             $$refFilters{$i}{'Type'} eq $STR{'LastModified'} or
+             $$refFilters{$i}{'Type'} eq $STR{'Created'}) {
+      my $cmpDateUT;
+      if    ($$refFilters{$i}{'Type'} eq $STR{'LastAccessed'}) { $cmpDateUT = (stat($path))[8];  }
+      elsif ($$refFilters{$i}{'Type'} eq $STR{'LastModified'}) { $cmpDateUT = (stat($path))[9];  }
+      else                                                     { $cmpDateUT = (stat($path))[10]; }
+      if (&cmpDates($path, $$refFilters{$i}{'DateUT'}, $cmpDateUT, $$refFilters{$i}{'TypeOp'})) {
+        $matchTmp = 1;
+      } else { $matchTmp = 0; }
+    } elsif ($$refFilters{$i}{'Type'} eq $STR{'OnlyFolders'}) {
+      if (-d $path) { $matchTmp = 1; }
+      else          { $matchTmp = 0; }
     }
-  # Path is a file
-  } elsif (!$onlyFolders) {
-    for (my $i = 1; $i <= $nbrFilters; $i++) {
-      my $matchTmp = 0;
-      # Contains filter
-      if ($$refFilters{$i}{'Type'} eq $STR{'Contains'}) {
-        my $expr;
-        my ($case, $regex, $fileOnly) = split(/\-/, $$refFilters{$i}{'Flags'});
-        if (!$regex) { $expr = quotemeta($$refFilters{$i}{'SearchStr'}); }
-        else         { $expr = $$refFilters{$i}{'SearchStr'};            }
-        my $relPath = $path =~ s/\Q$dir\E\\//r;
-        $relPath    = $file if $fileOnly;
-        if ((!$case and $relPath =~ /$expr/i) or ($case and $relPath =~ /$expr/)) {
-          $matchTmp = 1;
-        } else { $matchTmp = 0; }
-      # File size filter
-      } elsif ($$refFilters{$i}{'Type'} eq $STR{'FileSize'}) {
-        if (&cmpFileSize($path, $$refFilters{$i}{'SearchStr'}, $$refFilters{$i}{'TypeOp'})) {
-          $matchTmp = 1;
-        } else { $matchTmp = 0; }
-      # Filter: Last accessed or Last modified
-      } elsif ($$refFilters{$i}{'Type'} eq $STR{'LastAccessed'} or $$refFilters{$i}{'Type'} eq $STR{'LastModified'}) {
-        my $cmpDateUT;
-        if ($$refFilters{$i}{'Type'} eq $STR{'LastAccessed'}) { $cmpDateUT = (stat($path))[8]; }
-        else                                                         { $cmpDateUT = (stat($path))[9]; }
-        if (&cmpDates($path, $$refFilters{$i}{'DateUT'}, $cmpDateUT, $$refFilters{$i}{'TypeOp'})) {
-          $matchTmp = 1;
-        } else { $matchTmp = 0; }
-      }
-      # Match
-      if ($matchTmp and exists($$refFilters{$i+1}{'Operator'})) {
-        # Next operator is OR
-        if ($$refFilters{$i+1}{'Operator'} eq $STR{'OR'}) { return(1);  } # No need to check other filter
-        else { $match = 1; }
-      # Don't match
-      } elsif (!$matchTmp) {
-        # Next or actual operator is AND
-        if ((exists($$refFilters{$i+1}{'Operator'}) and
-             ($$refFilters{$i+1}{'Operator'} eq $STR{'AND'}) or
-              ($$refFilters{$i}{'Operator'} eq $STR{'AND'}))) { return(0); } # No need to check other filter
-        else { $match = 0; }
-      } else { $match = $matchTmp; }
-    }
+    # Match
+    if ($matchTmp and exists($$refFilters{$i+1}{'Operator'})) {
+      # Next operator is OR
+      if ($$refFilters{$i+1}{'Operator'} eq $STR{'OR'}) { return(1);  } # No need to check other filter
+      else { $match = 1; }
+    # Don't match
+    } elsif (!$matchTmp) {
+      # Next or actual operator is AND
+      if ((exists($$refFilters{$i+1}{'Operator'}) and
+           ($$refFilters{$i+1}{'Operator'} eq $STR{'AND'}) or
+            ($$refFilters{$i}{'Operator'} eq $STR{'AND'}))) { return(0); } # No need to check other filter
+      else { $match = 0; }
+    } else { $match = $matchTmp; }
   }
   return(1) if $match;
   return(0);
@@ -4269,13 +4510,17 @@ sub cmpFileSize
 {
   # Local variables
   my ($filePath, $searchStr, $sizeOp) = @_;
-  my $fileSize = (stat($filePath))[7];
+  my $fileSize = 0;
+  if (-d $filePath) { find(sub { $fileSize += -s if -f }, $filePath); }
+  else              { $fileSize = (stat($filePath))[7];               }
   my ($cmpSize, $sizeUnit) = split(/ /, $searchStr);
   # Round down file size
-  if    ($sizeUnit eq $STR{'b'} ) { $fileSize = $fileSize; }
-  elsif ($sizeUnit eq $STR{'Kb'}) { $fileSize = $fileSize / 1024; }
-  elsif ($sizeUnit eq $STR{'Mb'}) { $fileSize = $fileSize / 1024 / 1024; }
-  elsif ($sizeUnit eq $STR{'Gb'}) { $fileSize = $fileSize / 1024 / 1024 / 1024; }
+  if ($fileSize) {
+    if    ($sizeUnit eq $STR{'b'} ) { $fileSize = $fileSize; }
+    elsif ($sizeUnit eq $STR{'Kb'}) { $fileSize = $fileSize / 1024; }
+    elsif ($sizeUnit eq $STR{'Mb'}) { $fileSize = $fileSize / 1024 / 1024; }
+    elsif ($sizeUnit eq $STR{'Gb'}) { $fileSize = $fileSize / 1024 / 1024 / 1024; }
+  }
   $fileSize = sprintf("%.0f", $fileSize);
   return(1) if $sizeOp eq $STR{'Smaller'} and $fileSize  < $cmpSize;
   return(1) if $sizeOp eq $STR{'Equal'}   and $fileSize == $cmpSize;
@@ -4316,11 +4561,13 @@ sub listFilesReport
     my $chListFilesOptCount = $win->chListFilesOptCount->Checked();       # Count
     my $chListFilesHV1      = $winHashVal->chListFilesHV1->Checked();     # MD5
     my $chListFilesHV2      = $winHashVal->chListFilesHV2->Checked();     # SHA1
+    my $chListFilesHV5      = $winHashVal->chListFilesHV5->Checked();     # SHA1-32
     my $chListFilesHV3      = $winHashVal->chListFilesHV3->Checked();     # SHA256
     my $chListFilesHV4      = $winHashVal->chListFilesHV4->Checked();     # SHA512
     my $chListFilesFD1      = $winFileDetails->chListFilesFD1->Checked(); # File or dir size
     my $chListFilesFD2      = $winFileDetails->chListFilesFD2->Checked(); # Last accessed
     my $chListFilesFD3      = $winFileDetails->chListFilesFD3->Checked(); # Last modified
+    my $chListFilesFD4      = $winFileDetails->chListFilesFD4->Checked(); # Created
     my $chListFilesOptNbrF  = $win->chListFilesOptNbrF->Checked();        # Number of files
     my $chListFilesOptNbrL  = $win->chListFilesOptNbrL->Checked();        # Number of lines
     my $chListFilesOptNbrP  = $win->chListFilesOptNbrP->Checked();        # Number of pages
@@ -4359,23 +4606,23 @@ sub listFilesReport
     if      ($formatReport == 1) {
       ($reportFilename, $nbrError) = &writeListFilesReportHTML($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptP, $chListFilesOptFN,
                                                                $chListFilesOptFE, $chListFilesOptCount, $chListFilesOptLM, $chListFilesHV1,
-                                                               $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesFD1, $chListFilesFD2,
-                                                               $chListFilesFD3, $chListFilesOptNbrF, $chListFilesOptNbrL, $chListFilesOptNbrP,
-                                                               $basedOnMD5, \%count, $logging, $fhLog);
+                                                               $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesHV5, $chListFilesFD1,
+                                                               $chListFilesFD2, $chListFilesFD3, $chListFilesFD4, $chListFilesOptNbrF, $chListFilesOptNbrL,
+                                                               $chListFilesOptNbrP, $basedOnMD5, \%count, $logging, $fhLog);
     # XLSX format
     } elsif ($formatReport == 2) {
       ($reportFilename, $nbrError) = &writeListFilesReportXLSX($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptP, $chListFilesOptFN,
                                                                $chListFilesOptFE, $chListFilesOptCount, $chListFilesOptLM, $chListFilesHV1,
-                                                               $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesFD1, $chListFilesFD2,
-                                                               $chListFilesFD3, $chListFilesOptNbrF, $chListFilesOptNbrL, $chListFilesOptNbrP,
-                                                               $basedOnMD5, \%count, $logging, $fhLog);
+                                                               $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesHV5, $chListFilesFD1,
+                                                               $chListFilesFD2, $chListFilesFD3, $chListFilesFD4, $chListFilesOptNbrF, $chListFilesOptNbrL,
+                                                               $chListFilesOptNbrP, $basedOnMD5, \%count, $logging, $fhLog);
     # Text format
     } else {
       ($reportFilename, $nbrError) = &writeListFilesReportTXT( $refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptP, $chListFilesOptFN,
                                                                $chListFilesOptFE, $chListFilesOptCount, $chListFilesOptLM, $chListFilesHV1,
-                                                               $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesFD1, $chListFilesFD2,
-                                                               $chListFilesFD3, $chListFilesOptNbrF, $chListFilesOptNbrL, $chListFilesOptNbrP,
-                                                               $basedOnMD5, \%count, $logging, $fhLog);
+                                                               $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesHV5, $chListFilesFD1,
+                                                               $chListFilesFD2, $chListFilesFD3, $chListFilesFD4, $chListFilesOptNbrF, $chListFilesOptNbrL,
+                                                               $chListFilesOptNbrP, $basedOnMD5, \%count, $logging, $fhLog);
     }
     $win->ShellExecute('open', $reportFilename,'','',1) if $win->chOpenReport->Checked(); # Open report
     # Logging
@@ -4396,8 +4643,8 @@ sub writeListFilesReportHTML
 {
   # Local variables
   my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptP, $chListFilesOptFN, $chListFilesOptFE, $chListFilesOptCount, $chListFilesOptLM,
-      $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF,
-      $chListFilesOptNbrL, $chListFilesOptNbrP, $basedOnMD5, $refCount, $logging, $fhLog) = @_;
+      $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesHV5, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3,
+      $chListFilesFD4, $chListFilesOptNbrF, $chListFilesOptNbrL, $chListFilesOptNbrP, $basedOnMD5, $refCount, $logging, $fhLog) = @_;
   my $searchedFolder = $win->tfInput->Text()."\\";
   my $nbrError       = 0;
   my $curr           = 0;
@@ -4430,11 +4677,13 @@ sub writeListFilesReportHTML
       print $fhReport "<td class=\"header\">$STR{'Count'}</td>\n"        if $chListFilesOptCount;
       print $fhReport "<td class=\"header\">MD5</td>\n"                  if $chListFilesHV1;
       print $fhReport "<td class=\"header\">SHA1</td>\n"                 if $chListFilesHV2;
+      print $fhReport "<td class=\"header\">SHA1-32</td>\n"              if $chListFilesHV5;
       print $fhReport "<td class=\"header\">SHA256</td>\n"               if $chListFilesHV3;
       print $fhReport "<td class=\"header\">SHA512</td>\n"               if $chListFilesHV4;
       print $fhReport "<td class=\"header\">$STR{'Size'}</td>\n"         if $chListFilesFD1;
       print $fhReport "<td class=\"header\">$STR{'LastAccessed'}</td>\n" if $chListFilesFD2;
       print $fhReport "<td class=\"header\">$STR{'LastModified'}</td>\n" if $chListFilesFD3;
+      print $fhReport "<td class=\"header\">$STR{'Created'}</td>\n"      if $chListFilesFD4;
       print $fhReport "<td class=\"header\">$STR{'NumberFiles'}</td>\n"  if $chListFilesOptNbrF;
       print $fhReport "<td class=\"header\">$STR{'NumberLines'}</td>\n"  if $chListFilesOptNbrL;
       print $fhReport "<td class=\"header\">$STR{'NumberPages'}</td>\n"  if $chListFilesOptNbrP;
@@ -4446,7 +4695,7 @@ sub writeListFilesReportHTML
         if    (-d $file and ($win->chListFilesOptNF->Checked() or (!$chListFilesOptFP and !$chListFilesOptP))) { } # No folder
         elsif (-d $file and $file eq $searchedFolder         ) { } # Searched folder
         else {
-          my (@stats) = stat($file) if $chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3; # File details
+          my (@stats) = stat($file) if $chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3 or $chListFilesFD4; # File details
           my $digestMD5;
           $win->lblPbCurr->Text($STR{'Processing'}.': '.$file);
           print $fhReport "<tr>\n";
@@ -4522,6 +4771,21 @@ sub writeListFilesReportHTML
               }
             } else { print $fhReport "<td></td>\n"; }
           }
+          # SHA1-32
+          if ($chListFilesHV5) {
+            if (!-d $file) { # For file only
+              $win->lblPbCurr->Text($STR{'HashingSHA132'}.': '.$file.'...');
+              if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
+                my $digestSHA132 = uc(encode_base32(pack('H40', $digestSHA1)));
+                if ($winConfig->chHashLowercase->Checked()) { print $fhReport "<td>".lc($digestSHA132)."</td>\n"; }
+                else                                        { print $fhReport "<td>".uc($digestSHA132)."</td>\n"; }
+              } else {
+                print $fhReport "<td></td>\n";
+                $nbrError++;
+                print $fhLog "$STR{'Error'} $STR{'HashingSHA132'}: $file\n" if $logging;
+              }
+            } else { print $fhReport "<td></td>\n"; }
+          }
           # SHA256
           if ($chListFilesHV3) {
             if (!-d $file) { # For file only
@@ -4578,6 +4842,13 @@ sub writeListFilesReportHTML
           if ($chListFilesFD3) {
             if ($stats[9]) {
               my $timeStr = &date($stats[9]);
+              print $fhReport "<td>$timeStr</td>\n";
+            } else { print $fhReport "<td>&nbsp;</td>\n"; }
+          }
+          # Created
+          if ($chListFilesFD4) {
+            if ($stats[10]) {
+              my $timeStr = &date($stats[10]);
               print $fhReport "<td>$timeStr</td>\n";
             } else { print $fhReport "<td>&nbsp;</td>\n"; }
           }
@@ -4680,8 +4951,8 @@ sub writeListFilesReportXLSX
 {
   # Local variables
   my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptP, $chListFilesOptFN, $chListFilesOptFE, $chListFilesOptCount, $chListFilesOptLM,
-      $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF,
-      $chListFilesOptNbrL, $chListFilesOptNbrP, $basedOnMD5, $refCount, $logging, $fhLog) = @_;
+      $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesHV5, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3,
+      $chListFilesFD4, $chListFilesOptNbrF, $chListFilesOptNbrL, $chListFilesOptNbrP, $basedOnMD5, $refCount, $logging, $fhLog) = @_;
   my $searchedFolder = $win->tfInput->Text()."\\";
   my $nbrError       = 0;
   my $curr           = 0;
@@ -4699,22 +4970,24 @@ sub writeListFilesReportXLSX
       my $formatNormal	= $excel->add_format(align => 'top'		, size => 10);
       my $formatDetails	= $excel->add_format(align => 'top'		, size => 10, text_wrap => 1);
       # Column size
-      my $maxWidthCol1  = length($STR{'FullPath'});
-      my $maxWidthCol13 = length($STR{'Path'});
-      my $maxWidthCol2  = length($STR{'Filename'});
-      my $maxWidthCol15 = length($STR{'Extension'});
-      my $maxWidthCol12 = length($STR{'Count'});
-      my $maxWidthCol3  = length('MD5');
-      my $maxWidthCol4  = length('SHA1');
-      my $maxWidthCol5  = length('SHA256');
-      my $maxWidthCol6  = length('SHA512');
-      my $maxWidthCol7  = length($STR{'Size'});
-      my $maxWidthCol8  = length($STR{'LastAccessed'});
-      my $maxWidthCol9  = length($STR{'LastModified'});
-      my $maxWidthCol10 = length($STR{'NumberFiles'});
-      my $maxWidthCol11 = length($STR{'NumberLines'});
-      my $maxWidthCol14 = length($STR{'NumberPages'});
-      my $maxWidthCol16 = length($STR{'ListMembers'});
+      my $maxWidthCol1  = length($STR{'FullPath'})+5;
+      my $maxWidthCol13 = length($STR{'Path'})+5;
+      my $maxWidthCol2  = length($STR{'Filename'})+5;
+      my $maxWidthCol15 = length($STR{'Extension'})+5;
+      my $maxWidthCol12 = length($STR{'Count'})+5;
+      my $maxWidthCol3  = length('MD5')+5;
+      my $maxWidthCol4  = length('SHA1')+5;
+      my $maxWidthCol17 = length('SHA1-32')+5;
+      my $maxWidthCol5  = length('SHA256')+5;
+      my $maxWidthCol6  = length('SHA512')+5;
+      my $maxWidthCol7  = length($STR{'Size'})+5;
+      my $maxWidthCol8  = length($STR{'LastAccessed'})+5;
+      my $maxWidthCol9  = length($STR{'LastModified'})+5;
+      my $maxWidthCol18 = length($STR{'Created'})+5;
+      my $maxWidthCol10 = length($STR{'NumberFiles'})+5;
+      my $maxWidthCol11 = length($STR{'NumberLines'})+5;
+      my $maxWidthCol14 = length($STR{'NumberPages'})+5;
+      my $maxWidthCol16 = length($STR{'ListMembers'})+5;
       # Header
       my $i = 0;
       if (!$win->chListFilesOptNH->Checked()) {
@@ -4726,11 +4999,13 @@ sub writeListFilesReportXLSX
         if ($chListFilesOptCount) { $sheet->write_string(0, $j, $STR{'Count'}       , $formatHeader); $j++; }
         if ($chListFilesHV1)      { $sheet->write_string(0, $j, 'MD5'               , $formatHeader); $j++; }
         if ($chListFilesHV2)      { $sheet->write_string(0, $j, 'SHA1'              , $formatHeader); $j++; }
+        if ($chListFilesHV5)      { $sheet->write_string(0, $j, 'SHA1-32'           , $formatHeader); $j++; }
         if ($chListFilesHV3)      { $sheet->write_string(0, $j, 'SHA256'            , $formatHeader); $j++; }
         if ($chListFilesHV4)      { $sheet->write_string(0, $j, 'SHA512'            , $formatHeader); $j++; }
         if ($chListFilesFD1)      { $sheet->write_string(0, $j, $STR{'Size'}        , $formatHeader); $j++; }
         if ($chListFilesFD2)      { $sheet->write_string(0, $j, $STR{'LastAccessed'}, $formatHeader); $j++; }
         if ($chListFilesFD3)      { $sheet->write_string(0, $j, $STR{'LastModified'}, $formatHeader); $j++; }
+        if ($chListFilesFD4)      { $sheet->write_string(0, $j, $STR{'Created'}     , $formatHeader); $j++; }
         if ($chListFilesOptNbrF)  { $sheet->write_string(0, $j, $STR{'NumberFiles'} , $formatHeader); $j++; }
         if ($chListFilesOptNbrL)  { $sheet->write_string(0, $j, $STR{'NumberLines'} , $formatHeader); $j++; }
         if ($chListFilesOptNbrP)  { $sheet->write_string(0, $j, $STR{'NumberPages'} , $formatHeader); $j++; }
@@ -4744,7 +5019,7 @@ sub writeListFilesReportXLSX
           elsif (-d $file and $file eq $searchedFolder         ) { } # Searched folder
           else {
             my $digestMD5;
-            my (@stats) = stat($file) if $chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3; # File details
+            my (@stats) = stat($file) if $chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3 or $chListFilesFD4; # File details
             $win->lblPbCurr->Text($STR{'Processing'}.': '.$file);
             # Full path
             if ($chListFilesOptFP) {
@@ -4833,6 +5108,22 @@ sub writeListFilesReportXLSX
               }
               $j++;
             }
+            # SHA1-32
+            if ($chListFilesHV5) {
+              if (!-d $file) { # For file only
+                $win->lblPbCurr->Text($STR{'HashingSHA132'}.': '.$file.'...');
+                if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
+                  my $digestSHA132 = uc(encode_base32(pack('H40', $digestSHA1)));
+                  if ($winConfig->chHashLowercase->Checked()) { $sheet->write_string($i, $j, lc($digestSHA132), $formatNormal); }
+                  else                                        { $sheet->write_string($i, $j, uc($digestSHA132), $formatNormal); }
+                  $maxWidthCol17 = length($digestSHA132) if length($digestSHA132) > $maxWidthCol17;
+                } else {
+                  $nbrError++;
+                  print $fhLog "$STR{'Error'} $STR{'HashingSHA132'}: $file\n"  if $logging;
+                }
+              }
+              $j++;
+            }
             # SHA256
             if ($chListFilesHV3) {
               if (!-d $file) { # For file only
@@ -4898,6 +5189,15 @@ sub writeListFilesReportXLSX
                 my $timeStr = &date($stats[9]);
                 $sheet->write_string($i, $j, $timeStr, $formatNormal);
                 $maxWidthCol9 = length($timeStr) if length($timeStr) > $maxWidthCol9;
+              }
+              $j++;
+            }
+            # Created
+            if ($chListFilesFD4) {
+              if ($stats[10]) {
+                my $timeStr = &date($stats[10]);
+                $sheet->write_string($i, $j, $timeStr, $formatNormal);
+                $maxWidthCol18 = length($timeStr) if length($timeStr) > $maxWidthCol18;
               }
               $j++;
             }
@@ -5011,15 +5311,20 @@ sub writeListFilesReportXLSX
       if ($chListFilesOptCount) { $sheet->set_column($j, $j, $maxWidthCol12); $j++; } # Count
       if ($chListFilesHV1)      { $sheet->set_column($j, $j, $maxWidthCol3);  $j++; } # MD5
       if ($chListFilesHV2)      { $sheet->set_column($j, $j, $maxWidthCol4);  $j++; } # SHA1
+      if ($chListFilesHV5)      { $sheet->set_column($j, $j, $maxWidthCol17); $j++; } # SHA1-32
       if ($chListFilesHV3)      { $sheet->set_column($j, $j, $maxWidthCol5);  $j++; } # SHA256
       if ($chListFilesHV4)      { $sheet->set_column($j, $j, $maxWidthCol6);  $j++; } # SHA512
       if ($chListFilesFD1)      { $sheet->set_column($j, $j, $maxWidthCol7);  $j++; } # File size
       if ($chListFilesFD2)      { $sheet->set_column($j, $j, $maxWidthCol8);  $j++; } # Last accessed
       if ($chListFilesFD3)      { $sheet->set_column($j, $j, $maxWidthCol9);  $j++; } # Last modified
+      if ($chListFilesFD4)      { $sheet->set_column($j, $j, $maxWidthCol18); $j++; } # Created
       if ($chListFilesOptNbrF)  { $sheet->set_column($j, $j, $maxWidthCol10); $j++; } # Number of files
       if ($chListFilesOptNbrL)  { $sheet->set_column($j, $j, $maxWidthCol11); $j++; } # Number of lines
       if ($chListFilesOptNbrP)  { $sheet->set_column($j, $j, $maxWidthCol14); $j++; } # Number of pages
       if ($chListFilesOptLM)    { $sheet->set_column($j, $j, $maxWidthCol16); $j++; } # List of members
+      # Set autofilter
+      $sheet->autofilter(0, 0, 0, $j);
+      $sheet->freeze_panes(1, 0);
     }
     $excel->close(); # Close the file
     return($reportFilename, $nbrError);
@@ -5033,8 +5338,8 @@ sub writeListFilesReportTXT
 {
   # Local variables
   my ($refListFiles, $nbrFiles, $chListFilesOptFP, $chListFilesOptP, $chListFilesOptFN, $chListFilesOptFE, $chListFilesOptCount, $chListFilesOptLM,
-      $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3, $chListFilesOptNbrF,
-      $chListFilesOptNbrL, $chListFilesOptNbrP, $basedOnMD5, $refCount, $logging, $fhLog) = @_;
+      $chListFilesHV1, $chListFilesHV2, $chListFilesHV3, $chListFilesHV4, $chListFilesHV5, $chListFilesFD1, $chListFilesFD2, $chListFilesFD3,
+      $chListFilesFD4, $chListFilesOptNbrF, $chListFilesOptNbrL, $chListFilesOptNbrP, $basedOnMD5, $refCount, $logging, $fhLog) = @_;
   my $searchedFolder = $win->tfInput->Text()."\\";
   my $nbrError       = 0;
   my $curr           = 0;
@@ -5048,11 +5353,13 @@ sub writeListFilesReportTXT
     $header .= $STR{'Count'}        . "\t" if $chListFilesOptCount;
     $header .= 'MD5'                . "\t" if $chListFilesHV1;
     $header .= 'SHA1'               . "\t" if $chListFilesHV2;
+    $header .= 'SHA1-32'            . "\t" if $chListFilesHV5;
     $header .= 'SHA256'             . "\t" if $chListFilesHV3;
     $header .= 'SHA512'             . "\t" if $chListFilesHV4;
     $header .= $STR{'Size'}         . "\t" if $chListFilesFD1;
     $header .= $STR{'LastAccessed'} . "\t" if $chListFilesFD2;
     $header .= $STR{'LastModified'} . "\t" if $chListFilesFD3;
+    $header .= $STR{'Created'}      . "\t" if $chListFilesFD4;
     $header .= $STR{'NumberFiles'}  . "\t" if $chListFilesOptNbrF;
     $header .= $STR{'NumberLines'}  . "\t" if $chListFilesOptNbrL;
     $header .= $STR{'NumberPages'}  . "\t" if $chListFilesOptNbrP;
@@ -5070,16 +5377,16 @@ sub writeListFilesReportTXT
     foreach my $file (sort { $a cmp $b } keys %{$refListFiles}) {
       if ($file) {
         if    (-d $file and ($win->chListFilesOptNF->Checked() or (!$chListFilesOptFP and !$chListFilesOptP))) { } # No folder
-        elsif (-d $file and $file eq $searchedFolder         ) { } # Searched folder
+        elsif (-d $file and $file eq $searchedFolder) { } # Searched folder
         else {
-          my (@stats) = stat($file) if $chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3; # File details
+          my (@stats) = stat($file) if $chListFilesFD1 or $chListFilesFD2 or $chListFilesFD3 or $chListFilesFD4; # File details
           my $digestMD5;
           $win->lblPbCurr->Text($STR{'Processing'}.': '.$file);
           my $newLine;
           # Full path
           if ($chListFilesOptFP) { $newLine .= "$file\t"; }
           # Path
-          if ($chListFilesOptFP) {
+          if ($chListFilesOptP) {
             my $path  = $file =~ s/\Q$searchedFolder\E\\?//r;
             $newLine .= "$path\t";
           }
@@ -5147,6 +5454,21 @@ sub writeListFilesReportTXT
               }
             } else { $newLine .= "\t"; }
           }
+          # SHA1-32
+          if ($chListFilesHV5) {
+            if (!-d $file) { # For file only
+              $win->lblPbCurr->Text($STR{'HashingSHA132'}.': '.$file.'...');
+              if (my $digestSHA1 = Digest::SHA->new(1)->addfile($file,"b")->hexdigest) {
+                my $digestSHA132 = uc(encode_base32(pack('H40', $digestSHA1)));
+                if ($winConfig->chHashLowercase->Checked()) { $newLine .= lc($digestSHA132) ."\t"; }
+                else                                        { $newLine .= uc($digestSHA132) ."\t"; }
+              } else {
+                $newLine .= "\t";
+                $nbrError++;
+                print $fhLog "$STR{'Error'} $STR{'HashingSHA1'}: $file\n"  if $logging;
+              }
+            } else { $newLine .= "\t"; }
+          }
           # SHA256
           if ($chListFilesHV3) {
             if (!-d $file) { # For file only
@@ -5201,6 +5523,11 @@ sub writeListFilesReportTXT
           if ($chListFilesFD3) {
             if ($stats[9]) { $newLine .= &date($stats[9]) . "\t"; }
             else           { $newLine .= "\t"; }
+          }
+          # Created
+          if ($chListFilesFD4) {
+            if ($stats[10]) { $newLine .= &date($stats[10]) . "\t"; }
+            else            { $newLine .= "\t"; }
           }
           # Number of files
           if ($chListFilesOptNbrF) {
@@ -5409,8 +5736,8 @@ sub listExtReportXLSX
     # Create a sheet
     if (my $sheet = $excel->add_worksheet($STR{'Extensions'})) {
       # Column size
-      my $maxWidthCol1 = length($STR{'Extension'});
-      my $maxWidthCol2 = length($STR{'Count'});
+      my $maxWidthCol1 = length($STR{'Extension'})+5;
+      my $maxWidthCol2 = length($STR{'Count'})+5;
       # Header
       my $i = 0;
       my $formatHeader = $excel->add_format();
@@ -5436,6 +5763,9 @@ sub listExtReportXLSX
       $sheet->set_column($j, $j, $maxWidthCol1); # Extension
       $j++;
       $sheet->set_column($j, $j, $maxWidthCol2); # Count
+      # Set autofilter
+      $sheet->autofilter(0, 0, 0, $j);
+      $sheet->freeze_panes(1, 0);
     }
     $excel->close(); # Close the file
     return($reportFilename);
@@ -5938,14 +6268,17 @@ sub renameBySort
     if      (!$sortType     and  $order) { @sortedFiles = sort {uc($a) cmp uc($b)} @{$subFolders{$subFolder}};               } # Ascending
     elsif   (!$sortType     and !$order) { @sortedFiles = sort {uc($b) cmp uc($a)} @{$subFolders{$subFolder}};               } # Descending
     # File Size
-    elsif   ($sortType == 1 and  $order) { @sortedFiles = sort {(stat($a))[7] <=> (stat($b))[7]} @{$subFolders{$subFolder}}; } # Ascending
-    elsif   ($sortType == 1 and !$order) { @sortedFiles = sort {(stat($b))[7] <=> (stat($a))[7]} @{$subFolders{$subFolder}}; } # Descending
+    elsif   ($sortType == 1 and  $order) { @sortedFiles = sort {(stat($a))[7]  <=> (stat($b))[7] } @{$subFolders{$subFolder}}; } # Ascending
+    elsif   ($sortType == 1 and !$order) { @sortedFiles = sort {(stat($b))[7]  <=> (stat($a))[7] } @{$subFolders{$subFolder}}; } # Descending
     # Last accessed
-    elsif   ($sortType == 2 and  $order) { @sortedFiles = sort {(stat($a))[8] <=> (stat($b))[8]} @{$subFolders{$subFolder}}; } # Ascending
-    elsif   ($sortType == 2 and !$order) { @sortedFiles = sort {(stat($b))[8] <=> (stat($a))[8]} @{$subFolders{$subFolder}}; } # Descending
+    elsif   ($sortType == 2 and  $order) { @sortedFiles = sort {(stat($a))[8]  <=> (stat($b))[8] } @{$subFolders{$subFolder}}; } # Ascending
+    elsif   ($sortType == 2 and !$order) { @sortedFiles = sort {(stat($b))[8]  <=> (stat($a))[8] } @{$subFolders{$subFolder}}; } # Descending
     # Last modified
-    elsif   ($sortType == 3 and  $order) { @sortedFiles = sort {(stat($a))[9] <=> (stat($b))[9]} @{$subFolders{$subFolder}}; } # Ascending
-    elsif   ($sortType == 3 and !$order) { @sortedFiles = sort {(stat($b))[9] <=> (stat($a))[9]} @{$subFolders{$subFolder}}; } # Descending
+    elsif   ($sortType == 3 and  $order) { @sortedFiles = sort {(stat($a))[9]  <=> (stat($b))[9] } @{$subFolders{$subFolder}}; } # Ascending
+    elsif   ($sortType == 3 and !$order) { @sortedFiles = sort {(stat($b))[9]  <=> (stat($a))[9] } @{$subFolders{$subFolder}}; } # Descending
+    # Created
+    elsif   ($sortType == 4 and  $order) { @sortedFiles = sort {(stat($a))[10] <=> (stat($b))[10]} @{$subFolders{$subFolder}}; } # Ascending
+    elsif   ($sortType == 4 and !$order) { @sortedFiles = sort {(stat($b))[10] <=> (stat($a))[10]} @{$subFolders{$subFolder}}; } # Descending
     my $i = &convertInitVal($incrValType, $initVal);
     # Store position of each file
     foreach my $file (@sortedFiles) { $$refListFiles{$file} = $i; $i++; }
@@ -6709,7 +7042,7 @@ sub btnHelp_Click
 {
   # Open XL-FileTools documentation page with default browser
   $win->ShellExecute('open', $URL_DOC,'','',1) or
-  Win32::GUI::MessageBox($win, Win32::FormatMessage(Win32::GetLastError()), "$STR{'update3'} XL-FileTools",0x40010);
+  Win32::GUI::MessageBox($win, Win32::FormatMessage(Win32::GetLastError()), "XL-FileTools", 0x40010);
 
 }  #--- End btnHelp_Click
 
@@ -6782,7 +7115,7 @@ sub loadConfig
   # Local variables
   my $refConfig = shift;
   # Open and load config values
-  if (-e $refConfig) {
+  if (-e $CONFIG_FILE) {
     open(CONFIG, $CONFIG_FILE);
     my @tab = <CONFIG>;
     close(CONFIG);

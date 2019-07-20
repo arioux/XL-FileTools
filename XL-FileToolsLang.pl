@@ -6,10 +6,10 @@
 # SourceForge         : https://sourceforge.net/p/xl-filetools
 # GitHub              : https://github.com/arioux/XL-FileTools
 # Creation            : 2016-05-15
-# Modified            : 2018-11-12
+# Modified            : 2019-07-20
 # Author              : Alain Rioux (admin@le-tools.com)
 #
-# Copyright (C) 2016-2018  Alain Rioux (le-tools.com)
+# Copyright (C) 2016-2019  Alain Rioux (le-tools.com)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -67,7 +67,7 @@ sub loadDefaultStr
   $$refSTR{'errorMsg'}           = 'Error messsage';
   $$refSTR{'errorConnection'}    = 'Connection error';
   $$refSTR{'errorOpening'}       = 'Error opening';
-  $$refSTR{'processRunning'}     = 'Running process';
+  $$refSTR{'processRunning'}     = 'A process is already running. Wait until it stops or restart the program.';
   $$refSTR{'Smaller'}            = 'Smaller than';
   $$refSTR{'Equal'}              = 'Equal';
   $$refSTR{'Bigger'}             = 'Bigger than';
@@ -104,6 +104,7 @@ sub loadDefaultStr
   $$refSTR{'HashingSHA1'}        = 'Calculating SHA1 for';
   $$refSTR{'HashingSHA256'}      = 'Calculating SHA256 for';
   $$refSTR{'HashingSHA512'}      = 'Calculating SHA512 for';
+  $$refSTR{'HashingSHA132'}      = 'Calculating SHA1-32 for';
   $$refSTR{'CalcNbrLines'}       = 'Calculating number of lines for';
   $$refSTR{'CalcNbrPages'}       = 'Calculating number of pages for';
   $$refSTR{'ListingExtensions'}  = 'Listing extension';
@@ -162,6 +163,7 @@ sub loadDefaultStr
   $$refSTR{'browseDirReport'}     = 'Browse report folder in Explorer';
   $$refSTR{'chOpenReport'}        = 'Open report when finished';
   $$refSTR{'chSaveOpenDir'}       = 'Remember this dir';
+  $$refSTR{'errNoValidDir'}       = 'You must enter a valid directory for report';
   $$refSTR{'Copy'}                = 'Copy';
   $$refSTR{'Move'}                = 'Move';
   $$refSTR{'chCopyTree'}          = 'Duplicate tree structure';
@@ -226,12 +228,15 @@ sub loadDefaultStr
   $$refSTR{'Size'}                = 'Size';
   $$refSTR{'LastAccessed'}        = 'Last accessed';
   $$refSTR{'LastModified'}        = 'Last modified';
+  $$refSTR{'Created'}             = 'Created';
   $$refSTR{'setContains'}         = 'You must enter a keyword or regex for this filter.';
   $$refSTR{'errRegex'}            = 'You must enter a valid regex.';
   $$refSTR{'setFileSize'}         = 'You must enter a valid file size for this filter.';
   $$refSTR{'setDate'}             = 'You must enter dates with valid format for this filter.';
   $$refSTR{'SetAddFilter'}        = 'Set or Add';
   $$refSTR{'Ok'}                  = 'Ok';
+  $$refSTR{'moveUp'}              = 'Move selected filter up';
+  $$refSTR{'moveDown'}            = 'Move selected filter down';
   # Config Window
   $$refSTR{'winConfig'}       = 'Settings';
   $$refSTR{'general'}         = 'General';

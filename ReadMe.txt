@@ -24,27 +24,16 @@ Credits
 -------
 
 For icons:
-
-The main logo of XL-FileTools has been created by Saki (Alexandre Moore, http://sa-ki.deviantart.com/) and distributed on term of the GNU General Public License.
-
-The icon used for Process button comes from Orb Icons by Taytel (http://taytel.deviantart.com/). This icon uses Linkware license.
-
-Stop icon has been created by emey87 (Manuel Lopez, emey87.deviantart.com) and distributed on term of the CC Attribution-No Derivative 4.0 license.
-
-The icon used for Preview button comes from Long Shadow iOS7 Icons by PelFusion (http://www.pelfusion.com). This icon uses Linkware license.
-
-Documentation button icon has been created by Oxygen Team (http://www.oxygen-icons.org) and distributed on term of the GNU Lesser General Public License.
-
-A lot of icons used for buttons come from the Blue Bits collection of Icojam (http://www.icojam.com/, licensed as "Public Domain") like config, about and open file.
-
-The icon used for open folder button comes from Basic Icons by PixelMixer and is distributed as Freeware.
-
-The Open folder in Explorer icon comes from Danish Royalty Free Icons by Jonas Rask Design (http://jonasraskdesign.com). This icon is distributed as Freeware.
-
-The folder opened and folder closed in Preview window come from Silk Icons by FamFamFam (http://famfamfam.com/lab/icons/silk) and are distributed on term of the CC Attribution 4.0 License.
-
-The filter icons (add, delete), the file, warning and error icons used in Preview window come from Fugue Icons by Yusuke Kamiyamane (http://p.yusukekamiyamane.com) and are distributed on term of the CC Attribution 4.0 License.
-
-Big filter list icon has been created by Double-J Design and is distributed on term of the CC Attribution-No Derivative 4.0 license.
-
-The import and save filters icons in File Filters window come from the Farm Fresh Icons collection by Fatcow Web Hosting and are distributed on term of the CC Attribution 4.0 license.
+- The main logo of XL-FileTools has been created by Saki (Alexandre Moore, http://sa-ki.deviantart.com/) and distributed on term of the GNU General Public License.
+- The icon used for Process button comes from Orb Icons by Taytel (http://taytel.deviantart.com/). This icon uses Linkware license.
+- Stop icon has been created by emey87 (Manuel Lopez, emey87.deviantart.com) and distributed on term of the CC Attribution-No Derivative 4.0 license.
+- The icon used for Preview button comes from Long Shadow iOS7 Icons by PelFusion (http://www.pelfusion.com). This icon uses Linkware license.
+- Documentation button icon has been created by Oxygen Team (http://www.oxygen-icons.org) and distributed on term of the GNU Lesser General Public License.
+- A lot of icons used for buttons come from the Blue Bits collection of Icojam (http://www.icojam.com/, licensed as "Public Domain") like config, about and open file.
+- The icon used for open folder button comes from Basic Icons by PixelMixer and is distributed as Freeware.
+- The Open folder in Explorer icon comes from Danish Royalty Free Icons by Jonas Rask Design (http://jonasraskdesign.com). This icon is distributed as Freeware.
+- The folder opened and folder closed in Preview window come from Silk Icons by FamFamFam (http://famfamfam.com/lab/icons/silk) and are distributed on term of the CC Attribution 4.0 License.
+- The filter icons (add, delete), the file, warning and error icons used in Preview window come from Fugue Icons by Yusuke Kamiyamane (http://p.yusukekamiyamane.com) and are distributed on term of the CC Attribution 4.0 License.
+- Small up and down arrows has been created by Oxygen Team on term of the GNU Lesser General Public License.
+- Big filter list icon has been created by Double-J Design and is distributed on term of the CC Attribution-No Derivative 4.0 license.
+- The import and save filters icons in File Filters window come from the Farm Fresh Icons collection by Fatcow Web Hosting and are distributed on term of the CC Attribution 4.0 license.
